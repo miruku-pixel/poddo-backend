@@ -1,0 +1,267 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  PREPARED
+  SERVED
+  PAID
+  CANCELED
+}
+
+enum OrderItemStatus {
+  ACTIVE
+  CANCELED
+}
+
+enum PaymentType {
+  CASH
+  CARD
+  QRIS
+  DEBIT
+  E_WALLET
+  BANK_TRANSFER
+}
+
+enum Role {
+  SUPERUSER
+  OWNER
+  ADMIN
+  CASHIER
+  CHEF
+  WAITER
+}
+
+model Outlet {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  addressLine String
+  city        String
+  state       String
+  postalCode  String
+  country     String
+  phoneNumber String?
+  contactName String?
+  email       String?
+
+  users   User[]
+  foods   Food[]
+  tables  DiningTable[]
+  orders  Order[]
+  billing Billing[]
+
+  createdAt          DateTime            @default(now())
+  OutletAccess       OutletAccess[]
+  OrderNumberCounter OrderNumberCounter?
+  OrderTypeDiscount  OrderTypeDiscount[]
+}
+
+model OutletAccess {
+  id       String @id @default(uuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  outletId String
+  outlet   Outlet @relation(fields: [outletId], references: [id])
+
+  @@unique([userId, outletId])
+}
+
+model User {
+  id           String         @id @default(uuid())
+  userId       String         @unique
+  username     String         @unique
+  password     String
+  role         Role
+  orders       Order[]        @relation("WaiterOrders")
+  outletId     String
+  outlet       Outlet         @relation(fields: [outletId], references: [id])
+  createdAt    DateTime       @default(now())
+  Billing      Billing[]
+  OutletAccess OutletAccess[]
+}
+
+model FoodCategory {
+  id    String @id @default(uuid())
+  name  String @unique
+  foods Food[]
+}
+
+model Food {
+  id             String        @id @default(uuid())
+  name           String
+  available      Boolean       @default(true)
+  outletId       String
+  outlet         Outlet        @relation(fields: [outletId], references: [id])
+  orderItems     OrderItem[]
+  options        FoodOption[]
+  imageUrl       String?
+  foodCategoryId String?
+  foodCategory   FoodCategory? @relation(fields: [foodCategoryId], references: [id])
+  prices         FoodPrice[]
+  createdAt      DateTime      @default(now())
+
+  @@unique([name, outletId])
+}
+
+model FoodOption {
+  id              String            @id @default(uuid())
+  name            String
+  available       Boolean           @default(true)
+  foodId          String
+  food            Food              @relation(fields: [foodId], references: [id])
+  extraPrice      Float             @default(0)
+  OrderItemOption OrderItemOption[]
+
+  @@unique([name, foodId])
+}
+
+model FoodPrice {
+  id          String    @id @default(uuid())
+  foodId      String
+  food        Food      @relation(fields: [foodId], references: [id])
+  orderTypeId String
+  orderType   OrderType @relation(fields: [orderTypeId], references: [id])
+  price       Float
+
+  @@unique([foodId, orderTypeId])
+}
+
+model DiningTable {
+  id        String   @id @default(uuid())
+  number    Int
+  outletId  String
+  outlet    Outlet   @relation(fields: [outletId], references: [id])
+  orders    Order[]
+  createdAt DateTime @default(now())
+
+  @@unique([number, outletId]) // table number unique per branch
+}
+
+model OrderNumberCounter {
+  id        String   @id @default(uuid())
+  outletId  String
+  outlet    Outlet   @relation(fields: [outletId], references: [id])
+  current   Int      @default(0) // Current order number for the outlet
+  createdAt DateTime @default(now())
+
+  @@unique([outletId])
+}
+
+model OrderType {
+  id                String              @id @default(uuid())
+  name              String              @unique // e.g. "DINE_IN", "TAKEAWAY", "GOFOOD"
+  orders            Order[]
+  prices            FoodPrice[]
+  OrderTypeDiscount OrderTypeDiscount[]
+}
+
+// Add this new model to your schema.prisma file (or modify the existing one)
+
+model OrderTypeDiscount {
+  id          String    @id @default(uuid())
+  outletId    String // NEW: Foreign key to the Outlet model
+  outlet      Outlet    @relation(fields: [outletId], references: [id]) // NEW: Relation to Outlet
+  orderTypeId String // Foreign key to the OrderType model
+  orderType   OrderType @relation(fields: [orderTypeId], references: [id])
+  percentage  Float // Store as a decimal (e.g., 0.35 for 35%, 0.30 for 30%)
+  isActive    Boolean   @default(true) // Allows enabling/disabling discounts without deleting records
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt // Automatically updates on record modification
+
+  // NEW: Compound unique constraint to ensure one discount rule per orderType and outlet
+  @@unique([orderTypeId, outletId])
+}
+
+model Order {
+  id            String       @id @default(uuid())
+  orderNumber   String       @unique
+  diningTableId String?
+  diningTable   DiningTable? @relation(fields: [diningTableId], references: [id])
+  waiterId      String
+  waiter        User         @relation("WaiterOrders", fields: [waiterId], references: [id])
+  outletId      String
+  outlet        Outlet       @relation(fields: [outletId], references: [id])
+  orderTypeId   String
+  orderType     OrderType    @relation(fields: [orderTypeId], references: [id])
+  items         OrderItem[]
+  status        OrderStatus  @default(PENDING)
+  customerName  String?
+  onlineCode    String?
+  remark        String?
+  subtotal      Float        @default(0)
+  total         Float        @default(0)
+  createdAt     DateTime     @default(now())
+  Billing       Billing?
+}
+
+model OrderItem {
+  id         String            @id @default(uuid())
+  orderId    String
+  order      Order             @relation(fields: [orderId], references: [id])
+  foodId     String
+  food       Food              @relation(fields: [foodId], references: [id])
+  quantity   Int               @default(1)
+  unitPrice  Float             @default(0)
+  totalPrice Float             @default(0)
+  options    OrderItemOption[]
+  status     OrderItemStatus   @default(ACTIVE)
+  createdAt  DateTime          @default(now())
+
+  @@index([orderId])
+}
+
+model OrderItemOption {
+  id          String          @id @default(uuid())
+  orderItemId String
+  orderItem   OrderItem       @relation(fields: [orderItemId], references: [id])
+  optionId    String
+  option      FoodOption      @relation(fields: [optionId], references: [id])
+  quantity    Int             @default(1)
+  unitPrice   Float           @default(0)
+  totalPrice  Float           @default(0)
+  status      OrderItemStatus @default(ACTIVE)
+  createdAt   DateTime        @default(now())
+
+  @@index([optionId])
+}
+
+model Billing {
+  id          String @id @default(uuid())
+  orderId     String @unique
+  order       Order  @relation(fields: [orderId], references: [id])
+  orderNumber String @unique
+  outletId    String
+  outlet      Outlet @relation(fields: [outletId], references: [id])
+
+  // Financial summary
+  subtotal    Float // Copied from Order.subtotal
+  tax         Float // Copied from Order.tax
+  discount    Float // Copied from Order.discount
+  total       Float // Copied from Order.total
+  amountPaid  Float // Might differ if partial payment is allowed
+  changeGiven Float // For cash transactions
+
+  // Payment info
+  paymentType PaymentType
+  paidAt      DateTime    @default(now())
+  cashierId   String
+  cashier     User        @relation(fields: [cashierId], references: [id])
+
+  // Metadata for printing or auditing
+  receiptNumber String  @unique
+  remark        String?
+
+  createdAt DateTime @default(now())
+}

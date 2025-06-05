@@ -1,0 +1,10 @@
+-- CreateEnum
+CREATE TYPE "OrderItemStatus" AS ENUM ('ACTIVE', 'CANCELED');
+
+-- AlterTable
+ALTER TABLE "OrderItem" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "status" "OrderItemStatus" NOT NULL DEFAULT 'ACTIVE';
+
+-- AlterTable
+ALTER TABLE "OrderItemOption" ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "status" "OrderItemStatus" NOT NULL DEFAULT 'ACTIVE';

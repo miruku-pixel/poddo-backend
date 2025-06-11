@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "../../../lib/prisma"; // Adjust path as needed
-import { PaymentType } from "@prisma/client";
 import { withAuth } from "../../../middleware/authMiddleware";
 import { corsMiddleware } from "../../../middleware/cors";
 
@@ -10,15 +9,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
-    const {
-      outletId,
-      startDate,
-      endDate,
-      paymentType,
-      orderType,
-      limit = 100,
-      offset = 0,
-    } = req.query;
+    const { outletId, startDate, endDate } = req.query;
 
     if (!outletId) {
       return res.status(400).json({ error: "Outlet ID is required" });
@@ -31,6 +22,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       ? new Date(new Date(endDate as string).setHours(23, 59, 59, 999))
       : new Date();
 
+    // Fetch active OrderTypeDiscounts for the given outlet
+    const orderTypeDiscounts = await prisma.orderTypeDiscount.findMany({
+      where: {
+        outletId: outletId as string,
+        isActive: true,
+      },
+    });
+
+    // Create a map for quick lookup: orderTypeId -> discountPercentage
+    const discountMap = new Map<string, number>();
+    for (const discount of orderTypeDiscounts) {
+      discountMap.set(discount.orderTypeId, discount.percentage);
+    }
+
+    // === Exclude "Boss" and "Staff" OrderType ===
     const billings = await prisma.billing.findMany({
       where: {
         outletId: outletId as string,
@@ -38,128 +44,170 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           gte: start,
           lte: end,
         },
-        ...(paymentType && {
-          paymentType: paymentType as PaymentType,
-        }),
-        ...(orderType && {
-          order: {
-            orderType: {
-              name: orderType as string,
-            },
-          },
-        }),
-      },
-      include: {
         order: {
-          include: {
-            orderType: true,
-            items: {
-              include: {
-                food: {
-                  include: {
-                    foodCategory: true, // ← Add this
-                  },
-                },
-              },
+          orderType: {
+            name: {
+              notIn: ["Boss", "Staff"],
             },
           },
         },
       },
-      orderBy: [
-        { paidAt: "asc" }, // ← first sort by paidAt
-        { orderNumber: "asc" }, // ← then sort by orderNumber
-      ],
-      skip: Number(offset),
-      take: Number(limit),
+      select: {
+        orderId: true,
+        total: true,
+        discount: true,
+      },
     });
 
-    // Aggregates
-    let totalRevenue = 0;
-    let totalTax = 0;
-    let totalDiscount = 0;
-    let totalAmountPaid = 0;
-    let totalChangeGiven = 0;
+    const totalTransactions = billings.length;
+    const totalRevenue = billings.reduce((sum, b) => sum + b.total, 0);
+    const totalDiscount = billings.reduce((sum, b) => sum + b.discount, 0);
 
-    const salesByPaymentType: Record<string, number> = {};
-    const salesByOrderType: Record<string, number> = {};
-    const categorizedFoodSales: Record<string, Record<string, any>> = {};
+    const revenueByOrderType = await prisma.billing.groupBy({
+      by: ["orderId"],
+      where: {
+        outletId: outletId as string,
+        paidAt: {
+          gte: start,
+          lte: end,
+        },
+        order: {
+          orderType: {
+            name: {
+              notIn: ["Boss", "Staff"],
+            },
+          },
+        },
+      },
+      _sum: {
+        total: true,
+      },
+    });
 
-    const detailed = billings.map((b) => {
-      totalRevenue += b.total;
-      totalTax += b.tax;
-      totalDiscount += b.discount;
-      totalAmountPaid += b.amountPaid;
-      totalChangeGiven += b.changeGiven;
+    // Get corresponding OrderTypes
+    const orders = await prisma.order.findMany({
+      where: {
+        id: {
+          in: revenueByOrderType.map((r) => r.orderId),
+        },
+      },
+      include: {
+        orderType: true,
+      },
+    });
 
-      const paymentKey = b.paymentType;
-      const orderKey = b.order.orderType?.name || "UNKNOWN";
+    const orderTypeRevenueMap: { [key: string]: number } = {};
 
-      salesByPaymentType[paymentKey] =
-        (salesByPaymentType[paymentKey] || 0) + b.total;
-      salesByOrderType[orderKey] = (salesByOrderType[orderKey] || 0) + b.total;
+    for (const entry of revenueByOrderType) {
+      const order = orders.find((o) => o.id === entry.orderId);
+      if (!order) continue;
 
-      // Item-level aggregation
-      billings.forEach((b) => {
-        const orderType = b.order.orderType?.name || "UNKNOWN";
-
-        b.order.items.forEach((item) => {
-          const category = item.food.foodCategory?.name || "Uncategorized";
-          const foodId = item.foodId;
-          const foodName = item.food.name;
-          const quantity = item.quantity;
-          const total = item.totalPrice;
-
-          if (!categorizedFoodSales[category]) {
-            categorizedFoodSales[category] = {};
-          }
-
-          if (!categorizedFoodSales[category][foodId]) {
-            categorizedFoodSales[category][foodId] = {
-              foodName,
-              total: { qty: 0, total: 0 },
-            };
-          }
-
-          const foodEntry = categorizedFoodSales[category][foodId];
-
-          // Track each order type dynamically
-          if (!foodEntry[orderType]) {
-            foodEntry[orderType] = { qty: 0, total: 0 };
-          }
-
-          foodEntry[orderType].qty += quantity;
-          foodEntry[orderType].total += total;
-
-          foodEntry.total.qty += quantity;
-          foodEntry.total.total += total;
-        });
-      });
-
-      // Now convert into final structure
-      const foodSales: Record<string, any[]> = {};
-      for (const [category, foodMap] of Object.entries(categorizedFoodSales)) {
-        foodSales[category] = Object.values(foodMap);
+      const name = order.orderType.name;
+      if (!orderTypeRevenueMap[name]) {
+        orderTypeRevenueMap[name] = 0;
       }
-
-      return {
-        billingId: b.id,
-        orderNumber: b.orderNumber,
-        receiptNumber: b.receiptNumber,
-        paidAt: b.paidAt,
-        subtotal: b.subtotal,
-        discount: b.discount,
-        tax: b.tax,
-        total: b.total,
-        amountPaid: b.amountPaid,
-        changeGiven: b.changeGiven,
-        paymentType: b.paymentType,
-        orderType: orderKey,
-      };
-    });
+      orderTypeRevenueMap[name] += entry._sum.total ?? 0;
+    }
 
     const outlet = await prisma.outlet.findUnique({
       where: { id: outletId as string },
+      select: { name: true },
     });
+
+    const orderIds = billings.map((b) => b.orderId);
+
+    const orderItems = await prisma.orderItem.findMany({
+      where: {
+        orderId: { in: orderIds },
+        status: { not: "CANCELED" },
+      },
+      include: {
+        food: {
+          include: {
+            foodCategory: true, // Include foodCategory here
+          },
+        },
+        order: {
+          include: {
+            orderType: true,
+          },
+        },
+      },
+    });
+
+    type FoodOrderTypeKey = string; // `$
+    const foodOrderTypeSalesMap: {
+      [key: FoodOrderTypeKey]: {
+        foodName: string;
+        foodCategory: string; // Add foodCategory to the map
+        orderType: string;
+        quantity: number;
+        revenue: number;
+      };
+    } = {};
+    for (const item of orderItems) {
+      const foodId = item.foodId;
+      const foodName = item.food.name;
+      const foodCategory = item.food.foodCategory?.name; // Get the food category name
+      const orderTypeId = item.order.orderTypeId;
+      const orderType = item.order.orderType.name;
+      const key = `${foodId}_${orderType}_${foodCategory}`; // Include foodCategory in the key
+
+      if (!foodOrderTypeSalesMap[key]) {
+        foodOrderTypeSalesMap[key] = {
+          foodName,
+          foodCategory: foodCategory || "Unknown Category", // Default to "Unknown Category" if not available
+          orderType,
+          quantity: 0,
+          revenue: 0,
+        };
+      }
+      // Calculate adjusted revenue
+      let adjustedRevenue = item.totalPrice;
+      const discountPercentage = discountMap.get(orderTypeId);
+
+      if (discountPercentage !== undefined) {
+        adjustedRevenue = item.totalPrice * (1 - discountPercentage);
+      }
+
+      foodOrderTypeSalesMap[key].quantity += item.quantity;
+      foodOrderTypeSalesMap[key].revenue += adjustedRevenue;
+    }
+
+    // Now, group by food category
+    const foodSalesByCategoryAndOrderType: {
+      [category: string]: {
+        foodName: string;
+        orderTypeSales: {
+          [orderType: string]: {
+            quantity: number;
+            revenue: number;
+          };
+        };
+      }[];
+    } = {};
+
+    for (const item of Object.values(foodOrderTypeSalesMap)) {
+      const { foodCategory, foodName, orderType, quantity, revenue } = item;
+
+      if (!foodSalesByCategoryAndOrderType[foodCategory]) {
+        foodSalesByCategoryAndOrderType[foodCategory] = [];
+      }
+
+      let foodEntry = foodSalesByCategoryAndOrderType[foodCategory].find(
+        (entry) => entry.foodName === foodName
+      );
+
+      if (!foodEntry) {
+        foodEntry = {
+          foodName,
+          orderTypeSales: {},
+        };
+        foodSalesByCategoryAndOrderType[foodCategory].push(foodEntry);
+      }
+
+      foodEntry.orderTypeSales[orderType] = { quantity, revenue };
+    }
 
     res.status(200).json({
       meta: {
@@ -171,21 +219,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         outletName: outlet?.name || "Unknown Outlet",
       },
       summary: {
-        totalTransactions: billings.length,
+        totalTransactions,
         totalRevenue,
-        totalTax,
         totalDiscount,
-        totalAmountPaid,
-        totalChangeGiven,
-        salesByPaymentType,
-        salesByOrderType,
       },
-      data: detailed,
-      foodSales: {},
-      foodSalesByCategory: categorizedFoodSales,
+      revenueByOrderType: Object.entries(orderTypeRevenueMap).map(
+        ([orderType, revenue]) => ({ orderType, revenue })
+      ),
+      foodSalesByCategoryAndOrderType, // This will be your new structured data
     });
   } catch (error) {
-    console.error("Error generating sales report:", error);
+    console.error("Error generating Sales Summary report:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 }

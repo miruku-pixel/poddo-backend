@@ -21,7 +21,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         outletId: outletId as string,
 
         status: {
-          in: [OrderStatus.PENDING, OrderStatus.PREPARED, OrderStatus.SERVED],
+          in: [OrderStatus.PENDING, OrderStatus.SERVED],
         },
       },
       include: {

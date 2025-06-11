@@ -91,12 +91,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(400).json({ error: "Insufficient payment" });
     }
 
-    // 3. Generate custom unique receipt number (existing logic)
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const randomDigits = Math.floor(1000 + Math.random() * 9000);
-    const receiptNumber = `${order.outlet.name
-      .replace(/[\s-]+/g, "")
-      .toUpperCase()}-${dateStr}-${randomDigits}`;
+    // Lock the counter row for update
+    const counter = await prisma.receiptNumberCounter.upsert({
+      where: { outletId: order.outletId },
+      update: { current: { increment: 1 } },
+      create: { outletId: order.outletId, current: 1 },
+    });
+
+    // Generate order number string (e.g., "ORD-00123" or just "123")
+    const receiptNumber = counter.current.toString().padStart(5, "0");
 
     // 4. Create Billing record
     const billing = await prisma.billing.create({

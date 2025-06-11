@@ -15,10 +15,15 @@ datasource db {
 
 enum OrderStatus {
   PENDING
-  PREPARED
   SERVED
   PAID
   CANCELED
+}
+
+enum StockLogType {
+  INBOUND
+  OUTBOUND
+  ADJUST
 }
 
 enum OrderItemStatus {
@@ -28,11 +33,13 @@ enum OrderItemStatus {
 
 enum PaymentType {
   CASH
-  CARD
   QRIS
-  DEBIT
-  E_WALLET
   BANK_TRANSFER
+  KASBON
+  GRABFOOD
+  SHOPEEFOOD
+  GOFOOD
+  FOC
 }
 
 enum Role {
@@ -62,10 +69,11 @@ model Outlet {
   orders  Order[]
   billing Billing[]
 
-  createdAt          DateTime            @default(now())
-  OutletAccess       OutletAccess[]
-  OrderNumberCounter OrderNumberCounter?
-  OrderTypeDiscount  OrderTypeDiscount[]
+  createdAt            DateTime              @default(now())
+  OutletAccess         OutletAccess[]
+  OrderNumberCounter   OrderNumberCounter?
+  OrderTypeDiscount    OrderTypeDiscount[]
+  ReceiptNumberCounter ReceiptNumberCounter?
 }
 
 model OutletAccess {
@@ -92,6 +100,40 @@ model User {
   OutletAccess OutletAccess[]
 }
 
+model Ingredient {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  unit      String // e.g., "g", "ml", "pcs"
+  stockQty  Float // current stock in unit
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  foodLinks          FoodIngredient[]
+  IngredientStockLog IngredientStockLog[]
+}
+
+model FoodIngredient {
+  id           String @id @default(uuid())
+  foodId       String
+  ingredientId String
+  quantity     Float // how much ingredient needed per food unit
+
+  food       Food       @relation(fields: [foodId], references: [id])
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@unique([foodId, ingredientId]) // prevent duplicate ingredient entries for a food
+}
+
+model IngredientStockLog {
+  id           String       @id @default(uuid())
+  ingredientId String
+  ingredient   Ingredient   @relation(fields: [ingredientId], references: [id])
+  quantity     Float
+  type         StockLogType // "INBOUND" | "OUTBOUND" | "ADJUST"
+  createdAt    DateTime     @default(now())
+  note         String?
+}
+
 model FoodCategory {
   id    String @id @default(uuid())
   name  String @unique
@@ -99,18 +141,19 @@ model FoodCategory {
 }
 
 model Food {
-  id             String        @id @default(uuid())
+  id             String           @id @default(uuid())
   name           String
-  available      Boolean       @default(true)
+  available      Boolean          @default(true)
   outletId       String
-  outlet         Outlet        @relation(fields: [outletId], references: [id])
+  outlet         Outlet           @relation(fields: [outletId], references: [id])
   orderItems     OrderItem[]
   options        FoodOption[]
   imageUrl       String?
   foodCategoryId String?
-  foodCategory   FoodCategory? @relation(fields: [foodCategoryId], references: [id])
+  foodCategory   FoodCategory?    @relation(fields: [foodCategoryId], references: [id])
   prices         FoodPrice[]
-  createdAt      DateTime      @default(now())
+  createdAt      DateTime         @default(now())
+  FoodIngredient FoodIngredient[]
 
   @@unique([name, outletId])
 }
@@ -154,6 +197,16 @@ model OrderNumberCounter {
   outletId  String
   outlet    Outlet   @relation(fields: [outletId], references: [id])
   current   Int      @default(0) // Current order number for the outlet
+  createdAt DateTime @default(now())
+
+  @@unique([outletId])
+}
+
+model ReceiptNumberCounter {
+  id        String   @id @default(uuid())
+  outletId  String
+  outlet    Outlet   @relation(fields: [outletId], references: [id])
+  current   Int      @default(0) // Current receipt number for the outlet
   createdAt DateTime @default(now())
 
   @@unique([outletId])

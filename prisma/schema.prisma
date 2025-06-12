@@ -69,11 +69,12 @@ model Outlet {
   orders  Order[]
   billing Billing[]
 
-  createdAt            DateTime              @default(now())
-  OutletAccess         OutletAccess[]
-  OrderNumberCounter   OrderNumberCounter?
-  OrderTypeDiscount    OrderTypeDiscount[]
-  ReceiptNumberCounter ReceiptNumberCounter?
+  createdAt               DateTime                  @default(now())
+  OutletAccess            OutletAccess[]
+  OrderNumberCounter      OrderNumberCounter?
+  OrderTypeDiscount       OrderTypeDiscount[]
+  ReceiptNumberCounter    ReceiptNumberCounter?
+  DailyCashReconciliation DailyCashReconciliation[]
 }
 
 model OutletAccess {
@@ -317,4 +318,25 @@ model Billing {
   remark        String?
 
   createdAt DateTime @default(now())
+}
+
+model DailyCashReconciliation {
+  id       String   @id @default(uuid())
+  outletId String
+  outlet   Outlet   @relation(fields: [outletId], references: [id])
+  date     DateTime @map("report_date") // The date this reconciliation record is for (YYYY-MM-DD, typically 00:00:00 for the start of the day)
+
+  previousDayBalance Float   @default(0) // Balance carried from the end of the previous day
+  cashDeposit        Float   @default(0) // Manually entered cash deposit for this day
+  dailyCashRevenue   Float   @default(0) // Total CASH revenue for this specific day (from Billing table)
+  remainingBalance   Float   @default(0) // Calculated: previousDayBalance + dailyCashRevenue - cashDeposit
+  paymentRemarks     Json?
+  isLocked           Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([outletId, date]) // Ensure only one reconciliation record per outlet per day
+  @@index([date]) // For efficient querying by date
+  @@map("daily_cash_reconciliation") // Maps to a table name in your database
 }

@@ -45,159 +45,151 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     );
     console.time("TotalBatchUpdateTransaction");
 
-    const result = await prisma.$transaction(
-      async (tx) => {
-        const existingOrder = await tx.order.findUnique({
-          where: { id: orderId },
-          select: { id: true, orderTypeId: true },
+    const result = await prisma.$transaction(async (tx) => {
+      const existingOrder = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { id: true, orderTypeId: true },
+      });
+
+      if (!existingOrder) {
+        throw new Error("Order not found.");
+      }
+
+      let totalPriceDifference = 0;
+
+      for (const item of items) {
+        console.log(
+          `[${new Date().toISOString()}] Processing item: ${item.id}`
+        );
+        console.time(`ItemProcessing-${item.id}`);
+
+        const { id: itemId, quantity, status, options } = item;
+
+        const existingItem = await tx.orderItem.findUnique({
+          where: { id: itemId },
+          include: {
+            food: true,
+            options: true,
+          },
         });
 
-        if (!existingOrder) {
-          throw new Error("Order not found.");
+        if (!existingItem) {
+          throw new Error(`Order item not found: ${itemId}`);
         }
 
-        let totalPriceDifference = 0;
+        const foodPrice = await tx.foodPrice.findUnique({
+          where: {
+            foodId_orderTypeId: {
+              foodId: existingItem.foodId,
+              orderTypeId: existingOrder.orderTypeId,
+            },
+          },
+        });
 
-        for (const item of items) {
-          console.log(
-            `[${new Date().toISOString()}] Processing item: ${item.id}`
-          );
-          console.time(`ItemProcessing-${item.id}`);
+        if (!foodPrice) {
+          throw new Error(`No price found for foodId ${existingItem.foodId}`);
+        }
 
-          const { id: itemId, quantity, status, options } = item;
+        let itemQty = quantity;
+        let itemStatus: OrderItemStatus =
+          status === "CANCELED"
+            ? OrderItemStatus.CANCELED
+            : OrderItemStatus.ACTIVE;
+        if (itemStatus === "CANCELED") itemQty = 0;
 
-          const existingItem = await tx.orderItem.findUnique({
-            where: { id: itemId },
+        const itemUnitPrice = foodPrice.price;
+        const itemBaseTotal = itemQty * itemUnitPrice;
+
+        let optionTotal = 0;
+
+        if (options?.length) {
+          for (const opt of options) {
+            const {
+              id: optionItemId,
+              quantity: optQtyRaw,
+              status: optStatusRaw,
+            } = opt;
+
+            const existingOption = await tx.orderItemOption.findUnique({
+              where: { id: optionItemId },
+              include: { option: true }, // To get extraPrice
+            });
+
+            if (!existingOption) {
+              throw new Error(`Option not found: ${optionItemId}`);
+            }
+
+            const optQty = optStatusRaw === "CANCELED" ? 0 : optQtyRaw;
+            const optStatus =
+              optStatusRaw === "CANCELED"
+                ? OrderItemStatus.CANCELED
+                : OrderItemStatus.ACTIVE;
+            const optUnitPrice = existingOption.option.extraPrice;
+            const optTotal = optQty * optUnitPrice;
+
+            optionTotal += optTotal;
+
+            await tx.orderItemOption.update({
+              where: { id: optionItemId },
+              data: {
+                quantity: optQty,
+                unitPrice: optUnitPrice,
+                totalPrice: optTotal,
+                status: optStatus,
+              },
+            });
+          }
+        }
+
+        const newTotal = itemBaseTotal + optionTotal;
+        const priceDiff = newTotal - existingItem.totalPrice;
+        totalPriceDifference += priceDiff;
+
+        await tx.orderItem.update({
+          where: { id: itemId },
+          data: {
+            quantity: itemQty,
+            unitPrice: itemUnitPrice,
+            totalPrice: newTotal,
+            status: itemStatus,
+          },
+        });
+
+        console.timeEnd(`ItemProcessing-${item.id}`);
+      }
+      console.log(
+        `[${new Date().toISOString()}] Attempting final order update for order: ${
+          existingOrder.id
+        }`
+      ); // This is where the error occurs
+
+      const updatedOrder = await tx.order.update({
+        where: { id: existingOrder.id },
+        data: {
+          subtotal: { increment: totalPriceDifference },
+          total: { increment: totalPriceDifference },
+        },
+        include: {
+          items: {
             include: {
               food: true,
-              options: true,
-            },
-          });
-
-          if (!existingItem) {
-            throw new Error(`Order item not found: ${itemId}`);
-          }
-
-          const foodPrice = await tx.foodPrice.findUnique({
-            where: {
-              foodId_orderTypeId: {
-                foodId: existingItem.foodId,
-                orderTypeId: existingOrder.orderTypeId,
-              },
-            },
-          });
-
-          if (!foodPrice) {
-            throw new Error(`No price found for foodId ${existingItem.foodId}`);
-          }
-
-          let itemQty = quantity;
-          let itemStatus: OrderItemStatus =
-            status === "CANCELED"
-              ? OrderItemStatus.CANCELED
-              : OrderItemStatus.ACTIVE;
-          if (itemStatus === "CANCELED") itemQty = 0;
-
-          const itemUnitPrice = foodPrice.price;
-          const itemBaseTotal = itemQty * itemUnitPrice;
-
-          let optionTotal = 0;
-
-          if (options?.length) {
-            for (const opt of options) {
-              const {
-                id: optionItemId,
-                quantity: optQtyRaw,
-                status: optStatusRaw,
-              } = opt;
-
-              const existingOption = await tx.orderItemOption.findUnique({
-                where: { id: optionItemId },
-                include: { option: true }, // To get extraPrice
-              });
-
-              if (!existingOption) {
-                throw new Error(`Option not found: ${optionItemId}`);
-              }
-
-              const optQty = optStatusRaw === "CANCELED" ? 0 : optQtyRaw;
-              const optStatus =
-                optStatusRaw === "CANCELED"
-                  ? OrderItemStatus.CANCELED
-                  : OrderItemStatus.ACTIVE;
-              const optUnitPrice = existingOption.option.extraPrice;
-              const optTotal = optQty * optUnitPrice;
-
-              optionTotal += optTotal;
-
-              await tx.orderItemOption.update({
-                where: { id: optionItemId },
-                data: {
-                  quantity: optQty,
-                  unitPrice: optUnitPrice,
-                  totalPrice: optTotal,
-                  status: optStatus,
-                },
-              });
-            }
-          }
-
-          const newTotal = itemBaseTotal + optionTotal;
-          const priceDiff = newTotal - existingItem.totalPrice;
-          totalPriceDifference += priceDiff;
-
-          await tx.orderItem.update({
-            where: { id: itemId },
-            data: {
-              quantity: itemQty,
-              unitPrice: itemUnitPrice,
-              totalPrice: newTotal,
-              status: itemStatus,
-            },
-          });
-
-          console.timeEnd(`ItemProcessing-${item.id}`);
-        }
-        console.log(
-          `[${new Date().toISOString()}] Attempting final order update for order: ${
-            existingOrder.id
-          }`
-        ); // This is where the error occurs
-
-        const updatedOrder = await tx.order.update({
-          where: { id: existingOrder.id },
-          data: {
-            subtotal: { increment: totalPriceDifference },
-            total: { increment: totalPriceDifference },
-          },
-          include: {
-            items: {
-              include: {
-                food: true,
-                options: {
-                  include: {
-                    option: true,
-                  },
+              options: {
+                include: {
+                  option: true,
                 },
               },
             },
           },
-        });
-        console.log(
-          `[${new Date().toISOString()}] Final order update successful for order: ${
-            existingOrder.id
-          }`
-        );
+        },
+      });
+      console.log(
+        `[${new Date().toISOString()}] Final order update successful for order: ${
+          existingOrder.id
+        }`
+      );
 
-        return updatedOrder;
-      },
-      {
-        // THIS IS THE PART YOU NEED TO ADD/MODIFY
-        timeout: 10000, // Set to 10 seconds (10,000 ms)
-        // You can also adjust maxWait if needed, but timeout is the primary suspect here
-        maxWait: 5000, // default is 2000 ms (2 seconds)
-      }
-    ); // --- END OF YOUR TRANSACTION LOGIC ---
+      return updatedOrder;
+    }); // --- END OF YOUR TRANSACTION LOGIC ---
 
     console.timeEnd("TotalBatchUpdateTransaction");
     console.log(

@@ -40,6 +40,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
+    console.log(
+      `[${new Date().toISOString()}] Starting batch update transaction for order: ${orderId}`
+    );
+    console.time("TotalBatchUpdateTransaction");
+
     const result = await prisma.$transaction(async (tx) => {
       const existingOrder = await tx.order.findUnique({
         where: { id: orderId },
@@ -53,6 +58,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       let totalPriceDifference = 0;
 
       for (const item of items) {
+        console.log(
+          `[${new Date().toISOString()}] Processing item: ${item.id}`
+        );
+        console.time(`ItemProcessing-${item.id}`);
+
         const { id: itemId, quantity, status, options } = item;
 
         const existingItem = await tx.orderItem.findUnique({
@@ -144,7 +154,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             status: itemStatus,
           },
         });
+
+        console.timeEnd(`ItemProcessing-${item.id}`);
       }
+      console.log(
+        `[${new Date().toISOString()}] Attempting final order update for order: ${
+          existingOrder.id
+        }`
+      ); // This is where the error occurs
 
       const updatedOrder = await tx.order.update({
         where: { id: existingOrder.id },
@@ -165,13 +182,24 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           },
         },
       });
+      console.log(
+        `[${new Date().toISOString()}] Final order update successful for order: ${
+          existingOrder.id
+        }`
+      );
 
       return updatedOrder;
     });
 
+    console.timeEnd("TotalBatchUpdateTransaction");
+    console.log(
+      `[${new Date().toISOString()}] Batch update transaction completed successfully.`
+    );
+
     return res.status(200).json(result);
   } catch (error) {
-    console.error("[Batch Update Error]", error);
+    console.error(`[${new Date().toISOString()}] [Batch Update Error]`, error);
+
     return res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to update items.",
     });

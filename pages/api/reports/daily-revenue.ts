@@ -23,22 +23,24 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         .json({ error: "Date parameter is required (YYYY-MM-DD)." });
     }
 
-    const targetDate = new Date(date as string);
-    if (isNaN(targetDate.getTime())) {
-      return res
-        .status(400)
-        .json({ error: "Invalid date format. Please use YYYY-MM-DD." });
-    }
+    // --- FIX: Robust Date Handling to ensure UTC consistency ---
+    const dateString = date as string;
+    const parts = dateString.split("-").map(Number);
+    // Create Date object in UTC to avoid local timezone interpretation issues
+    // Month is 0-indexed in JavaScript Date constructor, so subtract 1 from month part
+    const targetDateUTC = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
 
-    const startOfDay = new Date(targetDate);
-    startOfDay.setHours(0, 0, 0, 0);
+    // startOfDayUTC is now guaranteed to be YYYY-MM-DD 00:00:00 UTC
+    const startOfDayUTC = targetDateUTC;
 
-    const endOfDay = new Date(targetDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    // Calculate endOfDayUTC by going to the start of the next day and subtracting 1 millisecond
+    const endOfDayUTC = new Date(startOfDayUTC);
+    endOfDayUTC.setUTCDate(startOfDayUTC.getUTCDate() + 1); // Move to the next day in UTC
+    endOfDayUTC.setUTCMilliseconds(endOfDayUTC.getUTCMilliseconds() - 1); // Go back 1ms to get 23:59:59.999 of target day UTC
 
-    const previousDay = new Date(startOfDay);
-    previousDay.setDate(startOfDay.getDate() - 1);
-    previousDay.setHours(0, 0, 0, 0);
+    // Calculate previousDayUTC by subtracting 1 day in UTC
+    const previousDayUTC = new Date(startOfDayUTC);
+    previousDayUTC.setUTCDate(startOfDayUTC.getUTCDate() - 1);
 
     const orderTypeDiscounts = await prisma.orderTypeDiscount.findMany({
       where: {
@@ -57,8 +59,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       where: {
         outletId: outletId as string,
         paidAt: {
-          gte: startOfDay,
-          lte: endOfDay,
+          gte: startOfDayUTC, // Use UTC dates for query
+          lte: endOfDayUTC, // Use UTC dates for query
         },
         paymentType: {
           not: PaymentType.FOC,
@@ -99,8 +101,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           outletId: outletId as string,
           Billing: {
             paidAt: {
-              gte: startOfDay,
-              lte: endOfDay,
+              gte: startOfDayUTC, // Use UTC dates for query
+              lte: endOfDayUTC, // Use UTC dates for query
             },
             paymentType: {
               not: PaymentType.FOC,
@@ -145,13 +147,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     let currentDayRemainingBalance = 0;
     let currentDayPaymentRemarks: { [key: string]: string } = {};
     let isReconciliationLocked = false; // <--- NEW: Initialize lock status
+    let submittedByCashierName: string | undefined = undefined;
 
     const previousDayReconciliation =
       await prisma.dailyCashReconciliation.findUnique({
         where: {
           outletId_date: {
             outletId: outletId as string,
-            date: previousDay,
+            date: previousDayUTC,
           },
         },
         select: {
@@ -168,7 +171,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         where: {
           outletId_date: {
             outletId: outletId as string,
-            date: startOfDay,
+            date: startOfDayUTC,
           },
         },
         select: {
@@ -176,6 +179,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           remainingBalance: true,
           paymentRemarks: true,
           isLocked: true, // <--- NEW: Select isLocked
+          submittedByCashierName: true,
         },
       });
 
@@ -185,6 +189,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       currentDayPaymentRemarks = (currentDayReconciliation.paymentRemarks ||
         {}) as { [key: string]: string };
       isReconciliationLocked = currentDayReconciliation.isLocked; // <--- NEW: Set lock status
+      submittedByCashierName =
+        currentDayReconciliation.submittedByCashierName ?? "";
     } else {
       const dailyCashRevenue =
         totalRevenueByPaymentType.find(
@@ -201,7 +207,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     res.status(200).json({
       meta: {
-        reportDate: startOfDay.toISOString().split("T")[0],
+        reportDate: startOfDayUTC.toISOString().split("T")[0],
         generatedAt: new Date().toISOString(),
         outletName: outlet?.name || "Unknown Outlet",
       },
@@ -215,6 +221,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           cashDeposit: currentDayCashDeposit,
           remainingBalance: currentDayRemainingBalance,
           isLocked: isReconciliationLocked, // <--- NEW: Include isLocked in response
+          submittedByCashierName: submittedByCashierName,
         },
         paymentRemarks: currentDayPaymentRemarks,
       },

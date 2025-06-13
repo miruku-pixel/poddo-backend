@@ -101,6 +101,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // Generate order number string (e.g., "ORD-00123" or just "123")
     const receiptNumber = counter.current.toString().padStart(5, "0");
 
+    const currentUTCDateTime = new Date(new Date().toISOString());
+
     // 4. Create Billing record
     const billing = await prisma.billing.create({
       data: {
@@ -117,6 +119,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         cashierId,
         receiptNumber,
         remark,
+        paidAt: currentUTCDateTime, // FIX: Set paidAt explicitly to current UTC time
+        createdAt: currentUTCDateTime,
       },
     });
 

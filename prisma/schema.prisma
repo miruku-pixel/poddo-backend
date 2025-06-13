@@ -160,15 +160,36 @@ model Food {
 }
 
 model FoodOption {
-  id              String            @id @default(uuid())
-  name            String
-  available       Boolean           @default(true)
-  foodId          String
-  food            Food              @relation(fields: [foodId], references: [id])
-  extraPrice      Float             @default(0)
-  OrderItemOption OrderItemOption[]
+  id                   String              @id @default(uuid())
+  name                 String
+  available            Boolean             @default(true)
+  foodId               String
+  food                 Food                @relation(fields: [foodId], references: [id])
+  extraPrice           Float               @default(0)
+  OrderItemOption      OrderItemOption[]
+  // --- NEW FIELDS ---
+  foodOptionCategoryId String?
+  foodOptionCategory   FoodOptionCategory? @relation(fields: [foodOptionCategoryId], references: [id])
+  // You might want to add default quantity for options if it's not always 1,
+  // or minimum/maximum for a specific option if it's not tied to parent food quantity
+  // minQuantity          Int?
+  // maxQuantity          Int?
 
   @@unique([name, foodId])
+}
+
+// Keep Food, FoodCategory, OrderItem, OrderItemOption as they are for now.
+// The OrderItemOption will still store the selected food option and its quantity.
+
+model FoodOptionCategory {
+  id            String       @id @default(uuid())
+  name          String       @unique // e.g., "Chicken Parts", "Sambal Type"
+  selectionType String // e.g., "SINGLE_REQUIRED", "MULTIPLE_OPTIONAL", "QUANTITY_MATCH"
+  minSelections Int          @default(0) // Minimum number of options from this category that must be selected
+  maxSelections Int? // Maximum number of options from this category that can be selected (null for unlimited)
+  quantityRule  String       @default("NONE") // "NONE", "MATCH_PARENT_QTY", "CUSTOM_RANGE"
+  // You might add validation messages here too
+  foodOptions   FoodOption[] // Link to the FoodOption model
 }
 
 model FoodPrice {
@@ -326,12 +347,13 @@ model DailyCashReconciliation {
   outlet   Outlet   @relation(fields: [outletId], references: [id])
   date     DateTime @map("report_date") // The date this reconciliation record is for (YYYY-MM-DD, typically 00:00:00 for the start of the day)
 
-  previousDayBalance Float   @default(0) // Balance carried from the end of the previous day
-  cashDeposit        Float   @default(0) // Manually entered cash deposit for this day
-  dailyCashRevenue   Float   @default(0) // Total CASH revenue for this specific day (from Billing table)
-  remainingBalance   Float   @default(0) // Calculated: previousDayBalance + dailyCashRevenue - cashDeposit
-  paymentRemarks     Json?
-  isLocked           Boolean @default(false)
+  previousDayBalance     Float   @default(0) // Balance carried from the end of the previous day
+  cashDeposit            Float   @default(0) // Manually entered cash deposit for this day
+  dailyCashRevenue       Float   @default(0) // Total CASH revenue for this specific day (from Billing table)
+  remainingBalance       Float   @default(0) // Calculated: previousDayBalance + dailyCashRevenue - cashDeposit
+  paymentRemarks         Json?
+  isLocked               Boolean @default(false)
+  submittedByCashierName String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

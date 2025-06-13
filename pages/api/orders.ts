@@ -142,6 +142,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       // Generate order number string (e.g., "ORD-00123" or just "123")
       const orderNumber = counter.current.toString().padStart(5, "0");
 
+      const createdAtUTC = new Date(new Date().toISOString());
+
       // Create the order
       return tx.order.create({
         data: {
@@ -156,6 +158,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           status: OrderStatus.PENDING,
           subtotal,
           total,
+          createdAt: createdAtUTC,
           items: {
             create: enrichedItems,
           },

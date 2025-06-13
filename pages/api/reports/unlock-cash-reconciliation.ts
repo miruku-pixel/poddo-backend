@@ -46,22 +46,22 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         .json({ error: "Date parameter is required (YYYY-MM-DD)." });
     }
 
-    const targetDate = new Date(date as string);
-    if (isNaN(targetDate.getTime())) {
-      return res
-        .status(400)
-        .json({ error: "Invalid date format. Please use YYYY-MM-DD." });
-    }
+    // --- FIX: Robust Date Handling to ensure UTC consistency ---
+    const dateString = date as string;
+    const parts = dateString.split("-").map(Number);
+    // Create Date object in UTC to avoid local timezone interpretation issues
+    // Month is 0-indexed in JavaScript Date constructor, so subtract 1 from month part
+    const targetDateUTC = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
 
-    const startOfDay = new Date(targetDate);
-    startOfDay.setHours(0, 0, 0, 0);
+    // startOfDayUTC is now guaranteed to be YYYY-MM-DD 00:00:00 UTC
+    const startOfDayUTC = targetDateUTC;
 
     // Find and update the reconciliation record
     const updatedRecord = await prisma.dailyCashReconciliation.update({
       where: {
         outletId_date: {
           outletId: outletId as string,
-          date: startOfDay,
+          date: startOfDayUTC,
         },
       },
       data: {

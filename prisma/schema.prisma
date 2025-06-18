@@ -22,8 +22,17 @@ enum OrderStatus {
 
 enum StockLogType {
   INBOUND
-  OUTBOUND
-  ADJUST
+  DISCREPANCY
+  OUTBOUND_NM
+  OUTBOUND_BOSS
+  OUTBOUND_STAFF
+  TRANSFER_NAGOYA
+  TRANSFER_SERAYA
+  TRANSFER_BENGKONG
+  TRANSFER_MALALAYANG
+  TRANSFER_KLEAK
+  TRANSFER_PANIKI
+  TRANSFER_ITC
 }
 
 enum OrderItemStatus {
@@ -75,6 +84,8 @@ model Outlet {
   OrderTypeDiscount       OrderTypeDiscount[]
   ReceiptNumberCounter    ReceiptNumberCounter?
   DailyCashReconciliation DailyCashReconciliation[]
+  IngredientStockLog      IngredientStockLog[]
+  Ingredient              Ingredient[]
 }
 
 model OutletAccess {
@@ -103,7 +114,9 @@ model User {
 
 model Ingredient {
   id        String   @id @default(uuid())
-  name      String   @unique
+  outletId  String // <--- ADD THIS FIELD
+  outlet    Outlet   @relation(fields: [outletId], references: [id]) // <--- ADD THIS RELATION
+  name      String
   unit      String // e.g., "g", "ml", "pcs"
   stockQty  Float // current stock in unit
   createdAt DateTime @default(now())
@@ -114,25 +127,28 @@ model Ingredient {
 }
 
 model FoodIngredient {
-  id           String @id @default(uuid())
+  id           String     @id @default(uuid())
   foodId       String
   ingredientId String
   quantity     Float // how much ingredient needed per food unit
-
-  food       Food       @relation(fields: [foodId], references: [id])
-  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+  food         Food       @relation(fields: [foodId], references: [id])
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
 
   @@unique([foodId, ingredientId]) // prevent duplicate ingredient entries for a food
 }
 
 model IngredientStockLog {
-  id           String       @id @default(uuid())
-  ingredientId String
-  ingredient   Ingredient   @relation(fields: [ingredientId], references: [id])
-  quantity     Float
-  type         StockLogType // "INBOUND" | "OUTBOUND" | "ADJUST"
-  createdAt    DateTime     @default(now())
-  note         String?
+  id              String       @id @default(uuid())
+  ingredientId    String
+  ingredient      Ingredient   @relation(fields: [ingredientId], references: [id])
+  outletId        String // <--- ADD THIS FIELD
+  outlet          Outlet       @relation(fields: [outletId], references: [id]) // <--- ADD THIS RELATION
+  quantity        Float
+  type            StockLogType // "INBOUND" | "OUTBOUND" | "ADJUST"
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @default(now())
+  transactionDate DateTime     @default(now())
+  note            String?
 }
 
 model FoodCategory {
@@ -261,7 +277,7 @@ model OrderTypeDiscount {
 
 model Order {
   id            String       @id @default(uuid())
-  orderNumber   String       @unique
+  orderNumber   String
   diningTableId String?
   diningTable   DiningTable? @relation(fields: [diningTableId], references: [id])
   waiterId      String
@@ -279,6 +295,8 @@ model Order {
   total         Float        @default(0)
   createdAt     DateTime     @default(now())
   Billing       Billing?
+
+  @@unique([outletId, orderNumber])
 }
 
 model OrderItem {
@@ -316,7 +334,7 @@ model Billing {
   id          String @id @default(uuid())
   orderId     String @unique
   order       Order  @relation(fields: [orderId], references: [id])
-  orderNumber String @unique
+  orderNumber String
   outletId    String
   outlet      Outlet @relation(fields: [outletId], references: [id])
 
@@ -335,10 +353,12 @@ model Billing {
   cashier     User        @relation(fields: [cashierId], references: [id])
 
   // Metadata for printing or auditing
-  receiptNumber String  @unique
+  receiptNumber String
   remark        String?
 
   createdAt DateTime @default(now())
+
+  @@unique([outletId, receiptNumber])
 }
 
 model DailyCashReconciliation {

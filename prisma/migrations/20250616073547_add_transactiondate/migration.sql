@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "IngredientStockLog" ADD COLUMN     "transactionDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

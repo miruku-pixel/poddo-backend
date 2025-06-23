@@ -41,7 +41,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     !ingredientId ||
     typeof ingredientId !== "string" ||
     typeof quantity !== "number" ||
-    quantity <= 0 ||
+    quantity < 0 ||
     !allAllowedTransactionTypes.includes(type as StockLogType) || // Validate type against all allowed
     !date ||
     typeof date !== "string" ||

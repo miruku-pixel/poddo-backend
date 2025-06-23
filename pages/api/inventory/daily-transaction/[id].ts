@@ -41,7 +41,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     !id ||
     typeof id !== "string" ||
     typeof quantity !== "number" ||
-    quantity <= 0 || // Quantity in request body should always be positive
+    quantity < 0 || // Quantity in request body should always be positive
     !outletId ||
     typeof outletId !== "string"
   ) {

@@ -2,7 +2,10 @@
 
 import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "../../../lib/prisma";
-import { withAuth } from "../../../middleware/authMiddleware";
+import {
+  withAuth,
+  AuthenticatedRequest,
+} from "../../../middleware/authMiddleware";
 import { corsMiddleware } from "../../../middleware/cors";
 import { PaymentType } from "@prisma/client";
 
@@ -14,8 +17,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
-    const { outletId, date, cashDeposit, remarks, submittedByCashierName } =
-      req.body;
+    const {
+      outletId,
+      date,
+      cashDeposit,
+      remarks,
+      submittedByCashierName,
+      adjustment,
+    } = req.body;
+
+    const { user } = req as AuthenticatedRequest;
+    const isAdmin = user.role === "ADMIN";
 
     // --- Input Validation ---
     if (!outletId) {
@@ -49,19 +61,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(400).json({ error: "Remarks must be an object." });
     }
 
+    let validatedAdjustment = 0;
+    if (adjustment !== undefined) {
+      if (typeof adjustment !== "number" || isNaN(adjustment)) {
+        return res.status(400).json({ error: "Adjustment must be a number." });
+      }
+      validatedAdjustment = adjustment;
+    }
+
     // --- FIX: Robust Date Handling to ensure UTC consistency ---
     const dateString = date as string;
     const parts = dateString.split("-").map(Number);
-    // Create Date object in UTC to avoid local timezone interpretation issues
-    // Month is 0-indexed in JavaScript Date constructor, so subtract 1 from month part
     const targetDateUTC = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
-
-    // startOfDayUTC is now guaranteed to be YYYY-MM-DD 00:00:00 UTC
     const startOfDayUTC = targetDateUTC;
-
-    // Calculate previousDayUTC by subtracting 1 day in UTC
     const previousDayUTC = new Date(startOfDayUTC);
-    previousDayUTC.setUTCDate(startOfDayUTC.getUTCDate() - 1); // Use setUTCDate for UTC date manipulation
+    previousDayUTC.setUTCDate(startOfDayUTC.getUTCDate() - 1);
 
     // --- 1. Get Previous Day's Balance ---
     let previousDayBalance = 0;
@@ -108,7 +122,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // --- 3. Calculate Remaining Balance for Today ---
     const remainingBalance =
-      previousDayBalance + dailyCashRevenue - cashDeposit;
+      previousDayBalance + dailyCashRevenue + validatedAdjustment - cashDeposit;
+
+    // --- 4. Fetch existing record if updating ---
+    const existing = await prisma.dailyCashReconciliation.findUnique({
+      where: {
+        outletId_date: {
+          outletId: outletId as string,
+          date: startOfDayUTC,
+        },
+      },
+    });
 
     // --- 4. Upsert (Create or Update) DailyCashReconciliation Record ---
     const reconciliationRecord = await prisma.dailyCashReconciliation.upsert({
@@ -125,7 +149,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         remainingBalance: remainingBalance,
         paymentRemarks: remarks,
         isLocked: true, // <--- NEW: Lock on update/submission
-        submittedByCashierName: submittedByCashierName, // Store the cashier's name
+        adjustmentAmount: validatedAdjustment,
+        submittedByCashierName:
+          isAdmin && existing?.submittedByCashierName
+            ? existing.submittedByCashierName
+            : submittedByCashierName,
       },
       create: {
         outletId: outletId as string,
@@ -137,6 +165,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         paymentRemarks: remarks,
         isLocked: true, // <--- NEW: Lock on creation
         submittedByCashierName: submittedByCashierName, // Store the cashier's name
+        adjustmentAmount: validatedAdjustment,
       },
     });
 

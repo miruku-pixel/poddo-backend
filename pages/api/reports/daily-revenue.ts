@@ -180,6 +180,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           paymentRemarks: true,
           isLocked: true, // <--- NEW: Select isLocked
           submittedByCashierName: true,
+          adjustmentAmount: true,
         },
       });
 
@@ -222,6 +223,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           remainingBalance: currentDayRemainingBalance,
           isLocked: isReconciliationLocked, // <--- NEW: Include isLocked in response
           submittedByCashierName: submittedByCashierName,
+          adjustmentAmount: currentDayReconciliation?.adjustmentAmount ?? 0,
         },
         paymentRemarks: currentDayPaymentRemarks,
       },

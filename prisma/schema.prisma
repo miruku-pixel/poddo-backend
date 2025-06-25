@@ -370,6 +370,7 @@ model DailyCashReconciliation {
   previousDayBalance     Float   @default(0) // Balance carried from the end of the previous day
   cashDeposit            Float   @default(0) // Manually entered cash deposit for this day
   dailyCashRevenue       Float   @default(0) // Total CASH revenue for this specific day (from Billing table)
+  adjustmentAmount       Float?  @default(0) // Optional manual adjustment by admin
   remainingBalance       Float   @default(0) // Calculated: previousDayBalance + dailyCashRevenue - cashDeposit
   paymentRemarks         Json?
   isLocked               Boolean @default(false)

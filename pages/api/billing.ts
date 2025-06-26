@@ -127,6 +127,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           paidAt: currentUTCDateTime, // FIX: Set paidAt explicitly to current UTC time
           createdAt: currentUTCDateTime,
         },
+        include: {
+          cashier: {
+            select: {
+              id: true,
+              username: true, // or whatever field your User model has for display
+            },
+          },
+        },
       });
 
       // 5. Update order status to PAID

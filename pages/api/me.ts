@@ -18,19 +18,34 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const dbUser = await prisma.user.findUnique({
       where: { id: user.id },
-      include: { outlet: true },
+      include: {
+        outlet: true,
+        OutletAccess: {
+          include: { outlet: true }, // include outlet info like name
+        },
+      },
     });
 
     if (!dbUser) {
       return res.status(404).json({ error: "User not found" });
     }
 
+    const selectedOutlet =
+      dbUser.OutletAccess.find((oa) => oa.outletId === user.outletId)?.outlet
+        .name ||
+      dbUser.outlet?.name ||
+      "[Missing Outlet]";
+
     return res.status(200).json({
       id: dbUser.id,
       username: dbUser.username,
       role: dbUser.role,
-      outletId: dbUser.outletId,
-      entity: dbUser.outlet?.name || null,
+      outletId: user.outletId,
+      outlet: selectedOutlet, // Name from OutletAccess
+      outletAccess: dbUser.OutletAccess.map((oa) => ({
+        outletId: oa.outletId,
+        outletName: oa.outlet.name,
+      })),
     });
   } catch (err) {
     console.error("[Me API Error]", err);

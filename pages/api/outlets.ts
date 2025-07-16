@@ -9,7 +9,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   try {
     const outlets = await prisma.outlet.findMany({
-      orderBy: { createdAt: "asc" },
+      orderBy: { name: "asc" },
     });
 
     res.status(200).json(outlets);

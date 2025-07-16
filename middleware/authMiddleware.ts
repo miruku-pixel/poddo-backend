@@ -9,6 +9,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 interface JwtPayload {
   id: string;
   role: string;
+  outletId: string;
   iat: number;
   exp: number;
 }
@@ -17,6 +18,7 @@ export interface AuthenticatedRequest extends NextApiRequest {
   user: {
     id: string;
     role: string;
+    outletId: string;
   };
 }
 
@@ -39,8 +41,9 @@ export function withAuth(handler: NextApiHandler) {
 
       // Safely cast to AuthenticatedRequest
       (req as AuthenticatedRequest).user = {
-        id: user.id,
-        role: user.role,
+        id: decoded.id,
+        role: decoded.role,
+        outletId: decoded.outletId,
       };
 
       return handler(req, res);

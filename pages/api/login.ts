@@ -57,8 +57,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         .json({ error: "You do not have access to this outlet" });
     }
 
-    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, {
-      expiresIn: "1d",
+    const token = jwt.sign(
+      { id: user.id, role: user.role, outletId }, // include selected outletId
+      JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    console.log("User login outlet resolution:", {
+      selectedOutlet:
+        user.OutletAccess.find((oa) => oa.outletId === outletId)?.outlet.name ||
+        user.outlet?.name ||
+        null,
     });
 
     return res.status(200).json({
@@ -68,7 +77,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         username: user.username,
         role: user.role,
         outletId,
-        outlet: user.outlet?.name || null,
+        outlet:
+          user.OutletAccess.find((oa) => oa.outletId === outletId)?.outlet
+            .name ||
+          user.outlet?.name ||
+          null,
         OutletAccess: user.OutletAccess, // <-- return the data, not include/select
       },
     });

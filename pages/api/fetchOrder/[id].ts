@@ -22,11 +22,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         waiter: true,
         outlet: true,
         orderType: true,
-        // Billing removed as requested
         items: {
           include: {
-            food: true, // This only brings in the base 'Food' fields (id, name, available, outletId, foodCategoryId, etc.),
-            // but NOT the related 'FoodCategory' object itself unless explicitly asked for.
+            food: true,
             options: {
               include: {
                 option: true,

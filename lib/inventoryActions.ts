@@ -5,8 +5,6 @@ import {
   OrderItemStatus,
   Prisma,
 } from "@prisma/client";
-// No global prisma instance here, as this function is now designed
-// to always be called within a parent transaction.
 
 /**
  * Deducts ingredients from stock and logs the outbound transaction when an order is paid.
@@ -18,7 +16,7 @@ import {
  */
 export async function deductIngredientsForPaidOrder(
   orderId: string,
-  outletId: string, // <-- Added outletId parameter
+  outletId: string,
   tx: Prisma.TransactionClient
 ) {
   console.log(
@@ -26,27 +24,24 @@ export async function deductIngredientsForPaidOrder(
   );
 
   try {
-    // 1. Fetch the order and its items, including the food, its ingredients, and crucial OrderType name
-    // Use tx instead of a global prisma instance
     const order = await tx.order.findUnique({
       where: { id: orderId },
       include: {
         orderType: {
           select: {
-            name: true, // We need the order type name (e.g., "Boss", "Staff")
+            name: true,
           },
         },
         items: {
-          // IMPORTANT: Only include ACTIVE order items for ingredient deduction
           where: {
-            status: OrderItemStatus.ACTIVE, // <--- Added filter for ACTIVE OrderItems
+            status: OrderItemStatus.ACTIVE,
           },
           include: {
             food: {
               include: {
                 FoodIngredient: {
                   include: {
-                    ingredient: true, // Include the ingredient details to update stockQty
+                    ingredient: true,
                   },
                 },
               },
@@ -178,6 +173,7 @@ export async function deductIngredientsForPaidOrder(
         data: {
           ingredientId: ingredientId,
           outletId: outletId, // <-- Use the passed outletId here
+          orderId: orderId,
           quantity: totalDeduction,
           type: outboundLogType, // Use the dynamically determined type
           note: `Deducted for order ${order.orderNumber} (Type: ${order.orderType.name})`,

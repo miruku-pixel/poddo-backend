@@ -13,11 +13,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum PaymentStatus {
+  PAID
+  VOID
+}
+
 enum OrderStatus {
   PENDING
   SERVED
   PAID
   CANCELED
+  VOID
 }
 
 enum StockLogType {
@@ -33,6 +39,7 @@ enum StockLogType {
   TRANSFER_KLEAK
   TRANSFER_PANIKI
   TRANSFER_ITC
+  VOID
 }
 
 enum OrderItemStatus {
@@ -114,8 +121,8 @@ model User {
 
 model Ingredient {
   id        String   @id @default(uuid())
-  outletId  String // <--- ADD THIS FIELD
-  outlet    Outlet   @relation(fields: [outletId], references: [id]) // <--- ADD THIS RELATION
+  outletId  String
+  outlet    Outlet   @relation(fields: [outletId], references: [id])
   name      String
   unit      String // e.g., "g", "ml", "pcs"
   stockQty  Float // current stock in unit
@@ -130,21 +137,23 @@ model FoodIngredient {
   id           String     @id @default(uuid())
   foodId       String
   ingredientId String
-  quantity     Float // how much ingredient needed per food unit
+  quantity     Float
   food         Food       @relation(fields: [foodId], references: [id])
   ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
 
-  @@unique([foodId, ingredientId]) // prevent duplicate ingredient entries for a food
+  @@unique([foodId, ingredientId])
 }
 
 model IngredientStockLog {
   id              String       @id @default(uuid())
   ingredientId    String
   ingredient      Ingredient   @relation(fields: [ingredientId], references: [id])
-  outletId        String // <--- ADD THIS FIELD
-  outlet          Outlet       @relation(fields: [outletId], references: [id]) // <--- ADD THIS RELATION
+  outletId        String
+  outlet          Outlet       @relation(fields: [outletId], references: [id])
+  orderId         String?
+  order           Order?       @relation(fields: [orderId], references: [id])
   quantity        Float
-  type            StockLogType // "INBOUND" | "OUTBOUND" | "ADJUST"
+  type            StockLogType
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @default(now())
   transactionDate DateTime     @default(now())
@@ -183,19 +192,11 @@ model FoodOption {
   food                 Food                @relation(fields: [foodId], references: [id])
   extraPrice           Float               @default(0)
   OrderItemOption      OrderItemOption[]
-  // --- NEW FIELDS ---
   foodOptionCategoryId String?
   foodOptionCategory   FoodOptionCategory? @relation(fields: [foodOptionCategoryId], references: [id])
-  // You might want to add default quantity for options if it's not always 1,
-  // or minimum/maximum for a specific option if it's not tied to parent food quantity
-  // minQuantity          Int?
-  // maxQuantity          Int?
 
   @@unique([name, foodId])
 }
-
-// Keep Food, FoodCategory, OrderItem, OrderItemOption as they are for now.
-// The OrderItemOption will still store the selected food option and its quantity.
 
 model FoodOptionCategory {
   id            String       @id @default(uuid())
@@ -204,7 +205,6 @@ model FoodOptionCategory {
   minSelections Int          @default(0) // Minimum number of options from this category that must be selected
   maxSelections Int? // Maximum number of options from this category that can be selected (null for unlimited)
   quantityRule  String       @default("NONE") // "NONE", "MATCH_PARENT_QTY", "CUSTOM_RANGE"
-  // You might add validation messages here too
   foodOptions   FoodOption[] // Link to the FoodOption model
 }
 
@@ -252,49 +252,47 @@ model ReceiptNumberCounter {
 
 model OrderType {
   id                String              @id @default(uuid())
-  name              String              @unique // e.g. "DINE_IN", "TAKEAWAY", "GOFOOD"
+  name              String              @unique
   orders            Order[]
   prices            FoodPrice[]
   OrderTypeDiscount OrderTypeDiscount[]
 }
 
-// Add this new model to your schema.prisma file (or modify the existing one)
-
 model OrderTypeDiscount {
   id          String    @id @default(uuid())
-  outletId    String // NEW: Foreign key to the Outlet model
-  outlet      Outlet    @relation(fields: [outletId], references: [id]) // NEW: Relation to Outlet
-  orderTypeId String // Foreign key to the OrderType model
+  outletId    String
+  outlet      Outlet    @relation(fields: [outletId], references: [id])
+  orderTypeId String
   orderType   OrderType @relation(fields: [orderTypeId], references: [id])
-  percentage  Float // Store as a decimal (e.g., 0.35 for 35%, 0.30 for 30%)
-  isActive    Boolean   @default(true) // Allows enabling/disabling discounts without deleting records
+  percentage  Float
+  isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt // Automatically updates on record modification
+  updatedAt   DateTime  @updatedAt
 
-  // NEW: Compound unique constraint to ensure one discount rule per orderType and outlet
   @@unique([orderTypeId, outletId])
 }
 
 model Order {
-  id            String       @id @default(uuid())
-  orderNumber   String
-  diningTableId String?
-  diningTable   DiningTable? @relation(fields: [diningTableId], references: [id])
-  waiterId      String
-  waiter        User         @relation("WaiterOrders", fields: [waiterId], references: [id])
-  outletId      String
-  outlet        Outlet       @relation(fields: [outletId], references: [id])
-  orderTypeId   String
-  orderType     OrderType    @relation(fields: [orderTypeId], references: [id])
-  items         OrderItem[]
-  status        OrderStatus  @default(PENDING)
-  customerName  String?
-  onlineCode    String?
-  remark        String?
-  subtotal      Float        @default(0)
-  total         Float        @default(0)
-  createdAt     DateTime     @default(now())
-  Billing       Billing?
+  id                 String               @id @default(uuid())
+  orderNumber        String
+  diningTableId      String?
+  diningTable        DiningTable?         @relation(fields: [diningTableId], references: [id])
+  waiterId           String
+  waiter             User                 @relation("WaiterOrders", fields: [waiterId], references: [id])
+  outletId           String
+  outlet             Outlet               @relation(fields: [outletId], references: [id])
+  orderTypeId        String
+  orderType          OrderType            @relation(fields: [orderTypeId], references: [id])
+  items              OrderItem[]
+  status             OrderStatus          @default(PENDING)
+  customerName       String?
+  onlineCode         String?
+  remark             String?
+  subtotal           Float                @default(0)
+  total              Float                @default(0)
+  createdAt          DateTime             @default(now())
+  Billing            Billing?
+  IngredientStockLog IngredientStockLog[]
 
   @@unique([outletId, orderNumber])
 }
@@ -347,10 +345,11 @@ model Billing {
   changeGiven Float // For cash transactions
 
   // Payment info
+  status      PaymentStatus @default(PAID)
   paymentType PaymentType
-  paidAt      DateTime    @default(now())
+  paidAt      DateTime      @default(now())
   cashierId   String
-  cashier     User        @relation(fields: [cashierId], references: [id])
+  cashier     User          @relation(fields: [cashierId], references: [id])
 
   // Metadata for printing or auditing
   receiptNumber String

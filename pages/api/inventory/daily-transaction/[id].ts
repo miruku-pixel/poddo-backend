@@ -3,29 +3,24 @@ import { PrismaClient, StockLogType } from "@prisma/client";
 import {
   withAuth,
   AuthenticatedRequest,
-} from "../../../../middleware/authMiddleware"; // Adjust path as needed
-import { corsMiddleware } from "../../../../middleware/cors"; // Adjust path as needed
+} from "../../../../middleware/authMiddleware";
+import { corsMiddleware } from "../../../../middleware/cors";
 
 const prisma = new PrismaClient();
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Handle OPTIONS method for CORS preflight requests
   if (req.method === "OPTIONS") {
-    // The corsMiddleware should set the appropriate headers.
-    // We just need to respond with 200 OK for the preflight.
     return res.status(200).end();
   }
 
-  // Proceed with PUT method logic
   if (req.method !== "PUT") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { id } = req.query; // This `id` is the IngredientStockLog ID
+  const { id } = req.query;
   const { quantity, note, outletId } = req.body;
   const { user } = req as AuthenticatedRequest;
 
-  // Define types that result in a stock deduction (negative quantity effect)
   const deductionStockLogTypes: StockLogType[] = [
     StockLogType.DISCREPANCY,
     StockLogType.TRANSFER_NAGOYA,
@@ -41,7 +36,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     !id ||
     typeof id !== "string" ||
     typeof quantity !== "number" ||
-    quantity < 0 || // Quantity in request body should always be positive
+    quantity < 0 ||
     !outletId ||
     typeof outletId !== "string"
   ) {
@@ -53,31 +48,27 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   try {
     const updatedLog = await prisma.$transaction(async (tx) => {
-      // 1. Fetch the existing log record to get its old quantity, type, and ingredientId.
-      // Filter by outletId to ensure the log belongs to the specified outlet.
       const existingLog = await tx.ingredientStockLog.findUnique({
         where: {
           id: id,
-          outletId: outletId, // Filter by outletId
+          outletId: outletId,
         },
         select: {
           id: true,
-          quantity: true, // Old quantity
+          quantity: true,
           type: true,
           ingredientId: true,
           transactionDate: true,
-          ingredient: { select: { name: true, stockQty: true, unit: true } }, // Include ingredient details for checks/notes
+          ingredient: { select: { name: true, stockQty: true, unit: true } },
         },
       });
 
       if (!existingLog) {
-        // If the record is not found for the given ID and outletId, or outletId mismatch
         throw new Error(
           "Daily transaction record not found or does not belong to the specified outlet."
         );
       }
 
-      // Check if the type is one that CANNOT be manually edited (e.g., automated OUTBOUND types)
       const nonEditableTypes: StockLogType[] = [
         StockLogType.OUTBOUND_NM,
         StockLogType.OUTBOUND_BOSS,

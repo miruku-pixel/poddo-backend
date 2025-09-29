@@ -52,13 +52,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       }
 
       let totalAddedPrice = 0;
-      // This array will now hold the data for individual OrderItem creation,
-      // which allows for nested `create` for options.
+
       const orderItemCreateInputs: Prisma.OrderItemCreateInput[] = [];
 
-      // Loop through each new item provided in the request
       for (const item of items) {
-        // Validate required fields for a new order item
         if (
           !item.foodId ||
           typeof item.quantity !== "number" ||

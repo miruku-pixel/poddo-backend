@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { PrismaClient, OrderStatus, PaymentStatus } from "@prisma/client";
+import prisma from "../../lib/prisma";
+import { OrderStatus, PaymentStatus } from "@prisma/client";
 import {
   withAuth,
   AuthenticatedRequest,
@@ -7,7 +8,7 @@ import {
 import { corsMiddleware } from "../../middleware/cors";
 import { deductIngredientsForPaidOrder } from "../../lib/inventoryActions";
 
-const prisma = new PrismaClient();
+//const prisma = new PrismaClient();
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {

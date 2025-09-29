@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { PrismaClient, OrderStatus } from "@prisma/client";
+import { PrismaClient, OrderStatus, PaymentStatus } from "@prisma/client";
 import {
   withAuth,
   AuthenticatedRequest,
@@ -121,6 +121,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           amountPaid,
           changeGiven,
           paymentType,
+          status: PaymentStatus.PAID,
           cashierId,
           receiptNumber,
           remark,

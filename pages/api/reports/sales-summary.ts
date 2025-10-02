@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import prisma from "../../../lib/prisma"; // Adjust path as needed
+import prisma from "../../../lib/prisma";
+import { PaymentStatus } from "@prisma/client";
 import { withAuth } from "../../../middleware/authMiddleware";
 import { corsMiddleware } from "../../../middleware/cors";
 
@@ -44,6 +45,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           gte: start,
           lte: end,
         },
+        status: {
+          not: PaymentStatus.VOID,
+        },
         order: {
           orderType: {
             name: {
@@ -70,6 +74,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         paidAt: {
           gte: start,
           lte: end,
+        },
+        status: {
+          not: PaymentStatus.VOID,
         },
         order: {
           orderType: {

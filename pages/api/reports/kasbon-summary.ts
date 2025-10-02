@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, PaymentStatus } from "@prisma/client";
 import { withAuth } from "../../../middleware/authMiddleware"; // Adjust path as needed
 import { corsMiddleware } from "../../../middleware/cors"; // Adjust path as needed
 
@@ -54,6 +54,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         paidAt: {
           gte: start,
           lte: end,
+        },
+        status: {
+          not: PaymentStatus.VOID,
         },
         order: {
           // Filter by the related Order's OrderType name

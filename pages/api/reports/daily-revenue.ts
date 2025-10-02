@@ -4,7 +4,7 @@ import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "../../../lib/prisma";
 import { withAuth } from "../../../middleware/authMiddleware";
 import { corsMiddleware } from "../../../middleware/cors";
-import { PaymentType } from "@prisma/client";
+import { PaymentStatus, PaymentType } from "@prisma/client";
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -65,6 +65,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         paymentType: {
           not: PaymentType.FOC,
         },
+        status: {
+          not: PaymentStatus.VOID,
+        },
         order: {
           orderType: {
             name: {
@@ -106,6 +109,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             },
             paymentType: {
               not: PaymentType.FOC,
+            },
+            status: {
+              not: PaymentStatus.VOID,
             },
           },
           orderType: {

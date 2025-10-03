@@ -85,6 +85,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             username: true, // Assuming your User model has a username field
           },
         },
+        order: {
+          select: {
+            orderType: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
       },
       orderBy: {
         paidAt: "asc", // Order by transaction time
@@ -105,6 +114,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         paymentType: billing.paymentType,
         cashier: billing.cashier.username, // Extract cashier username
         paidAt: billing.paidAt.toISOString(),
+        orderType: billing.order.orderType.name,
       })
     );
 

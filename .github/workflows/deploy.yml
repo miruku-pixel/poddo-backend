@@ -1,0 +1,37 @@
+name: Deploy Next.js API Backend
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Set up Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 3. Install Dependencies and Build React App
+        run: |
+          npm ci   
+          npm run build
+
+      - name: 4. Deploy Static Files to VPS Web Root
+        uses: appleboy/scp-action@v0.1.7 
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }} 
+          port: 22
+          
+          # These inputs are now supported by scp-action
+          source: "./*" 
+          target: "/home/ubuntu/poddo-backend" 

@@ -22,6 +22,7 @@ enum OrderStatus {
   PENDING
   SERVED
   PAID
+  COMPLETED
   CANCELED
   VOID
 }

@@ -17,7 +17,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { orderId, status } = req.body;
   const user = (req as AuthenticatedRequest).user;
 
-  // Manual validation
   if (!orderId || typeof orderId !== "string") {
     return res.status(400).json({ error: "Invalid or missing orderId" });
   }
@@ -28,7 +27,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
-    // Find the order
     const existingOrder = await prisma.order.findUnique({
       where: { id: orderId },
       include: { waiter: true },
@@ -40,7 +38,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         .json({ error: `Order with ID ${orderId} not found` });
     }
 
-    // --- Authorization Logic ---
     const userRole = user?.role;
 
     if (userRole) {

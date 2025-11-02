@@ -36,12 +36,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         // If order not found, throw an error to rollback the transaction
         throw new Error("Order not found");
       }
-      if (
-        order.status !== OrderStatus.SERVED &&
-        order.status !== OrderStatus.PAID // Allow re-billing if already paid (e.g., partial payment adjustments)
-      ) {
-        throw new Error("Order is not ready for billing");
-      }
+
       // --- DISCOUNT CALCULATION LOGIC ---
       let finalDiscountAmount = 0;
       const orderTypeName = order.orderType.name;

@@ -19,15 +19,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const orders = await prisma.order.findMany({
       where: {
         outletId: outletId as string,
-
-        status: {
-          in: [OrderStatus.PENDING, OrderStatus.SERVED],
-        },
+        status: OrderStatus.PAID,
       },
       include: {
         diningTable: true,
         waiter: {
-          // Changed from 'true' to an object with 'select'
           select: {
             id: true,
             username: true,
@@ -35,14 +31,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             outletId: true,
           },
         },
-        orderType: true, // Include order type (DINE_IN, TAKEAWAY, etc)
-        outlet: true, // Include outlet info
+        orderType: true,
+        outlet: true,
 
         items: {
           include: {
             food: {
               include: {
-                foodCategory: true, // <-- Add this line
+                foodCategory: true,
               },
             },
             options: {

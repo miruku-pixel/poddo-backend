@@ -7,7 +7,7 @@ import {
   AuthenticatedRequest,
 } from "../../../middleware/authMiddleware";
 import { corsMiddleware } from "../../../middleware/cors";
-import { PaymentType } from "@prisma/client";
+import { PaymentStatus, PaymentType } from "@prisma/client";
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -105,6 +105,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           lte: new Date(startOfDayUTC.getTime() + 24 * 60 * 60 * 1000 - 1), // End of day UTC
         },
         paymentType: PaymentType.CASH,
+        status: {
+          not: PaymentStatus.VOID,
+        },
         order: {
           orderType: {
             name: {

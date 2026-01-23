@@ -30,6 +30,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     StockLogType.TRANSFER_KLEAK,
     StockLogType.TRANSFER_PANIKI,
     StockLogType.TRANSFER_ITC,
+    StockLogType.TRANSFER_MANTOS,
   ];
 
   if (

@@ -93,6 +93,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       StockLogType.TRANSFER_KLEAK,
       StockLogType.TRANSFER_PANIKI,
       StockLogType.TRANSFER_ITC,
+      StockLogType.TRANSFER_MANTOS,
     ];
 
     // 1. Calculate the Opening Balance for the entire reporting month
@@ -166,6 +167,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         transferKleak: number;
         transferPaniki: number;
         transferItc: number;
+        transferMantos: number;
       }
     >();
 
@@ -186,6 +188,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         transferKleak: 0,
         transferPaniki: 0,
         transferItc: 0,
+        transferMantos: 0,
       });
     }
 
@@ -231,6 +234,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         case StockLogType.TRANSFER_ITC:
           agg.transferItc += log.quantity;
           break;
+        case StockLogType.TRANSFER_MANTOS:
+          agg.transferMantos += log.quantity;
+          break;
         default:
           console.warn(
             `[Monthly Report API] Unhandled StockLogType: ${log.type} for quantity: ${log.quantity} on ${dateKey}`
@@ -264,7 +270,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         dailyStats.transferMalalayang -
         dailyStats.transferKleak -
         dailyStats.transferPaniki -
-        dailyStats.transferItc;
+        dailyStats.transferItc -
+        dailyStats.transferMantos;
 
       reportData.push({
         date: dateKey,
@@ -283,6 +290,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         transferKleak: Math.round(dailyStats.transferKleak), // Round to nearest whole number
         transferPaniki: Math.round(dailyStats.transferPaniki), // Round to nearest whole number
         transferItc: Math.round(dailyStats.transferItc), // Round to nearest whole number
+        transferMantos: Math.round(dailyStats.transferMantos), // Round to nearest whole number
         closingBalance: Math.round(closingBalanceForCurrentDay), // Round to nearest whole number
       });
 

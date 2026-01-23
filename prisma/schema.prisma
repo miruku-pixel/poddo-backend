@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,6 +5,306 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model Outlet {
+  id                      String                    @id @default(uuid())
+  name                    String                    @unique
+  addressLine             String
+  city                    String
+  state                   String
+  postalCode              String
+  country                 String
+  phoneNumber             String?
+  contactName             String?
+  email                   String?
+  createdAt               DateTime                  @default(now())
+  billing                 Billing[]
+  tables                  DiningTable[]
+  foods                   Food[]
+  Ingredient              Ingredient[]
+  IngredientStockLog      IngredientStockLog[]
+  orders                  Order[]
+  OrderNumberCounter      OrderNumberCounter?
+  OrderTypeDiscount       OrderTypeDiscount[]
+  OutletAccess            OutletAccess[]
+  ReceiptNumberCounter    ReceiptNumberCounter?
+  users                   User[]
+  DailyCashReconciliation DailyCashReconciliation[]
+}
+
+model OutletAccess {
+  id       String @id @default(uuid())
+  userId   String
+  outletId String
+  outlet   Outlet @relation(fields: [outletId], references: [id])
+  user     User   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, outletId])
+}
+
+model User {
+  id           String         @id @default(uuid())
+  role         Role
+  createdAt    DateTime       @default(now())
+  password     String
+  username     String         @unique
+  userId       String         @unique
+  outletId     String
+  Billing      Billing[]
+  orders       Order[]        @relation("WaiterOrders")
+  OutletAccess OutletAccess[]
+  outlet       Outlet         @relation(fields: [outletId], references: [id])
+}
+
+model Ingredient {
+  id                 String               @id @default(uuid())
+  name               String
+  unit               String
+  stockQty           Float
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  outletId           String
+  foodLinks          FoodIngredient[]
+  outlet             Outlet               @relation(fields: [outletId], references: [id])
+  IngredientStockLog IngredientStockLog[]
+}
+
+model FoodIngredient {
+  id           String     @id @default(uuid())
+  foodId       String
+  ingredientId String
+  quantity     Float
+  food         Food       @relation(fields: [foodId], references: [id])
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@unique([foodId, ingredientId])
+}
+
+model IngredientStockLog {
+  id              String       @id @default(uuid())
+  ingredientId    String
+  quantity        Float
+  type            StockLogType
+  createdAt       DateTime     @default(now())
+  note            String?
+  transactionDate DateTime     @default(now())
+  updatedAt       DateTime     @default(now())
+  outletId        String
+  orderId         String?
+  ingredient      Ingredient   @relation(fields: [ingredientId], references: [id])
+  order           Order?       @relation(fields: [orderId], references: [id])
+  outlet          Outlet       @relation(fields: [outletId], references: [id])
+}
+
+model FoodCategory {
+  id    String @id @default(uuid())
+  name  String @unique
+  foods Food[]
+}
+
+model Food {
+  id             String           @id @default(dbgenerated("uuid_generate_v4()"))
+  name           String
+  available      Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  imageUrl       String?
+  foodCategoryId String?
+  outletId       String
+  foodCategory   FoodCategory?    @relation(fields: [foodCategoryId], references: [id])
+  outlet         Outlet           @relation(fields: [outletId], references: [id])
+  FoodIngredient FoodIngredient[]
+  options        FoodOption[]
+  prices         FoodPrice[]
+  orderItems     OrderItem[]
+
+  @@unique([name, outletId])
+}
+
+model FoodOption {
+  id                   String              @id @default(dbgenerated("uuid_generate_v4()"))
+  name                 String
+  extraPrice           Float               @default(0)
+  foodId               String
+  available            Boolean             @default(true)
+  foodOptionCategoryId String?
+  food                 Food                @relation(fields: [foodId], references: [id])
+  foodOptionCategory   FoodOptionCategory? @relation(fields: [foodOptionCategoryId], references: [id])
+  OrderItemOption      OrderItemOption[]
+
+  @@unique([name, foodId])
+}
+
+model FoodOptionCategory {
+  id            String       @id @default(uuid())
+  name          String       @unique
+  selectionType String
+  minSelections Int          @default(0)
+  maxSelections Int?
+  quantityRule  String       @default("NONE")
+  foodOptions   FoodOption[]
+}
+
+model FoodPrice {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()"))
+  foodId      String
+  orderTypeId String
+  price       Float
+  food        Food      @relation(fields: [foodId], references: [id])
+  orderType   OrderType @relation(fields: [orderTypeId], references: [id])
+
+  @@unique([foodId, orderTypeId])
+}
+
+model DiningTable {
+  id        String   @id @default(uuid())
+  number    Int
+  createdAt DateTime @default(now())
+  outletId  String
+  outlet    Outlet   @relation(fields: [outletId], references: [id])
+  orders    Order[]
+
+  @@unique([number, outletId])
+}
+
+model OrderNumberCounter {
+  id        String   @id @default(uuid())
+  outletId  String   @unique
+  current   Int      @default(0)
+  createdAt DateTime @default(now())
+  outlet    Outlet   @relation(fields: [outletId], references: [id])
+}
+
+model ReceiptNumberCounter {
+  id        String   @id @default(uuid())
+  outletId  String   @unique
+  current   Int      @default(0)
+  createdAt DateTime @default(now())
+  outlet    Outlet   @relation(fields: [outletId], references: [id])
+}
+
+model OrderType {
+  id                String              @id @default(uuid())
+  name              String              @unique
+  prices            FoodPrice[]
+  orders            Order[]
+  OrderTypeDiscount OrderTypeDiscount[]
+}
+
+model OrderTypeDiscount {
+  id          String    @id @default(uuid())
+  outletId    String
+  orderTypeId String
+  percentage  Float
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  orderType   OrderType @relation(fields: [orderTypeId], references: [id])
+  outlet      Outlet    @relation(fields: [outletId], references: [id])
+
+  @@unique([orderTypeId, outletId])
+}
+
+model Order {
+  id                 String               @id @default(uuid())
+  diningTableId      String?
+  waiterId           String
+  status             OrderStatus          @default(PENDING)
+  createdAt          DateTime             @default(now())
+  remark             String?
+  subtotal           Float                @default(0)
+  total              Float                @default(0)
+  orderTypeId        String
+  outletId           String
+  orderNumber        String
+  customerName       String?
+  onlineCode         String?
+  Billing            Billing?
+  IngredientStockLog IngredientStockLog[]
+  diningTable        DiningTable?         @relation(fields: [diningTableId], references: [id])
+  orderType          OrderType            @relation(fields: [orderTypeId], references: [id])
+  outlet             Outlet               @relation(fields: [outletId], references: [id])
+  waiter             User                 @relation("WaiterOrders", fields: [waiterId], references: [id])
+  items              OrderItem[]
+
+  @@unique([outletId, orderNumber])
+}
+
+model OrderItem {
+  id         String            @id @default(uuid())
+  orderId    String
+  foodId     String
+  quantity   Int               @default(1)
+  totalPrice Float             @default(0)
+  unitPrice  Float             @default(0)
+  createdAt  DateTime          @default(now())
+  status     OrderItemStatus   @default(ACTIVE)
+  food       Food              @relation(fields: [foodId], references: [id])
+  order      Order             @relation(fields: [orderId], references: [id])
+  options    OrderItemOption[]
+
+  @@index([orderId])
+}
+
+model OrderItemOption {
+  id          String          @id @default(uuid())
+  orderItemId String
+  optionId    String
+  quantity    Int             @default(1)
+  totalPrice  Float           @default(0)
+  unitPrice   Float           @default(0)
+  createdAt   DateTime        @default(now())
+  status      OrderItemStatus @default(ACTIVE)
+  option      FoodOption      @relation(fields: [optionId], references: [id])
+  orderItem   OrderItem       @relation(fields: [orderItemId], references: [id])
+
+  @@index([optionId])
+}
+
+model Billing {
+  id            String        @id @default(uuid())
+  orderId       String        @unique
+  subtotal      Float
+  tax           Float
+  discount      Float
+  total         Float
+  amountPaid    Float
+  changeGiven   Float
+  paymentType   PaymentType
+  paidAt        DateTime      @default(now())
+  cashierId     String
+  receiptNumber String
+  remark        String?
+  createdAt     DateTime      @default(now())
+  outletId      String
+  orderNumber   String
+  status        PaymentStatus @default(PAID)
+  cashier       User          @relation(fields: [cashierId], references: [id])
+  order         Order         @relation(fields: [orderId], references: [id])
+  outlet        Outlet        @relation(fields: [outletId], references: [id])
+
+  @@unique([outletId, receiptNumber])
+}
+
+model DailyCashReconciliation {
+  id                     String   @id @default(uuid())
+  outletId               String
+  date                   DateTime @map("report_date")
+  previousDayBalance     Float    @default(0)
+  cashDeposit            Float    @default(0)
+  dailyCashRevenue       Float    @default(0)
+  remainingBalance       Float    @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  paymentRemarks         Json?
+  isLocked               Boolean  @default(false)
+  submittedByCashierName String?
+  adjustmentAmount       Float?   @default(0)
+  outlet                 Outlet   @relation(fields: [outletId], references: [id])
+
+  @@unique([outletId, date])
+  @@index([date])
+  @@map("daily_cash_reconciliation")
 }
 
 enum PaymentStatus {
@@ -22,9 +316,9 @@ enum OrderStatus {
   PENDING
   SERVED
   PAID
-  COMPLETED
   CANCELED
   VOID
+  COMPLETED
 }
 
 enum StockLogType {
@@ -40,6 +334,7 @@ enum StockLogType {
   TRANSFER_KLEAK
   TRANSFER_PANIKI
   TRANSFER_ITC
+  TRANSFER_MANTOS
   VOID
 }
 
@@ -60,326 +355,10 @@ enum PaymentType {
 }
 
 enum Role {
+  WAITER
+  CHEF
+  CASHIER
+  ADMIN
   SUPERUSER
   OWNER
-  ADMIN
-  CASHIER
-  CHEF
-  WAITER
-}
-
-model Outlet {
-  id          String  @id @default(uuid())
-  name        String  @unique
-  addressLine String
-  city        String
-  state       String
-  postalCode  String
-  country     String
-  phoneNumber String?
-  contactName String?
-  email       String?
-
-  users   User[]
-  foods   Food[]
-  tables  DiningTable[]
-  orders  Order[]
-  billing Billing[]
-
-  createdAt               DateTime                  @default(now())
-  OutletAccess            OutletAccess[]
-  OrderNumberCounter      OrderNumberCounter?
-  OrderTypeDiscount       OrderTypeDiscount[]
-  ReceiptNumberCounter    ReceiptNumberCounter?
-  DailyCashReconciliation DailyCashReconciliation[]
-  IngredientStockLog      IngredientStockLog[]
-  Ingredient              Ingredient[]
-}
-
-model OutletAccess {
-  id       String @id @default(uuid())
-  userId   String
-  user     User   @relation(fields: [userId], references: [id])
-  outletId String
-  outlet   Outlet @relation(fields: [outletId], references: [id])
-
-  @@unique([userId, outletId])
-}
-
-model User {
-  id           String         @id @default(uuid())
-  userId       String         @unique
-  username     String         @unique
-  password     String
-  role         Role
-  orders       Order[]        @relation("WaiterOrders")
-  outletId     String
-  outlet       Outlet         @relation(fields: [outletId], references: [id])
-  createdAt    DateTime       @default(now())
-  Billing      Billing[]
-  OutletAccess OutletAccess[]
-}
-
-model Ingredient {
-  id        String   @id @default(uuid())
-  outletId  String
-  outlet    Outlet   @relation(fields: [outletId], references: [id])
-  name      String
-  unit      String // e.g., "g", "ml", "pcs"
-  stockQty  Float // current stock in unit
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  foodLinks          FoodIngredient[]
-  IngredientStockLog IngredientStockLog[]
-}
-
-model FoodIngredient {
-  id           String     @id @default(uuid())
-  foodId       String
-  ingredientId String
-  quantity     Float
-  food         Food       @relation(fields: [foodId], references: [id])
-  ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
-
-  @@unique([foodId, ingredientId])
-}
-
-model IngredientStockLog {
-  id              String       @id @default(uuid())
-  ingredientId    String
-  ingredient      Ingredient   @relation(fields: [ingredientId], references: [id])
-  outletId        String
-  outlet          Outlet       @relation(fields: [outletId], references: [id])
-  orderId         String?
-  order           Order?       @relation(fields: [orderId], references: [id])
-  quantity        Float
-  type            StockLogType
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @default(now())
-  transactionDate DateTime     @default(now())
-  note            String?
-}
-
-model FoodCategory {
-  id    String @id @default(uuid())
-  name  String @unique
-  foods Food[]
-}
-
-model Food {
-  id             String           @id @default(uuid())
-  name           String
-  available      Boolean          @default(true)
-  outletId       String
-  outlet         Outlet           @relation(fields: [outletId], references: [id])
-  orderItems     OrderItem[]
-  options        FoodOption[]
-  imageUrl       String?
-  foodCategoryId String?
-  foodCategory   FoodCategory?    @relation(fields: [foodCategoryId], references: [id])
-  prices         FoodPrice[]
-  createdAt      DateTime         @default(now())
-  FoodIngredient FoodIngredient[]
-
-  @@unique([name, outletId])
-}
-
-model FoodOption {
-  id                   String              @id @default(uuid())
-  name                 String
-  available            Boolean             @default(true)
-  foodId               String
-  food                 Food                @relation(fields: [foodId], references: [id])
-  extraPrice           Float               @default(0)
-  OrderItemOption      OrderItemOption[]
-  foodOptionCategoryId String?
-  foodOptionCategory   FoodOptionCategory? @relation(fields: [foodOptionCategoryId], references: [id])
-
-  @@unique([name, foodId])
-}
-
-model FoodOptionCategory {
-  id            String       @id @default(uuid())
-  name          String       @unique // e.g., "Chicken Parts", "Sambal Type"
-  selectionType String // e.g., "SINGLE_REQUIRED", "MULTIPLE_OPTIONAL", "QUANTITY_MATCH"
-  minSelections Int          @default(0) // Minimum number of options from this category that must be selected
-  maxSelections Int? // Maximum number of options from this category that can be selected (null for unlimited)
-  quantityRule  String       @default("NONE") // "NONE", "MATCH_PARENT_QTY", "CUSTOM_RANGE"
-  foodOptions   FoodOption[] // Link to the FoodOption model
-}
-
-model FoodPrice {
-  id          String    @id @default(uuid())
-  foodId      String
-  food        Food      @relation(fields: [foodId], references: [id])
-  orderTypeId String
-  orderType   OrderType @relation(fields: [orderTypeId], references: [id])
-  price       Float
-
-  @@unique([foodId, orderTypeId])
-}
-
-model DiningTable {
-  id        String   @id @default(uuid())
-  number    Int
-  outletId  String
-  outlet    Outlet   @relation(fields: [outletId], references: [id])
-  orders    Order[]
-  createdAt DateTime @default(now())
-
-  @@unique([number, outletId]) // table number unique per branch
-}
-
-model OrderNumberCounter {
-  id        String   @id @default(uuid())
-  outletId  String
-  outlet    Outlet   @relation(fields: [outletId], references: [id])
-  current   Int      @default(0) // Current order number for the outlet
-  createdAt DateTime @default(now())
-
-  @@unique([outletId])
-}
-
-model ReceiptNumberCounter {
-  id        String   @id @default(uuid())
-  outletId  String
-  outlet    Outlet   @relation(fields: [outletId], references: [id])
-  current   Int      @default(0) // Current receipt number for the outlet
-  createdAt DateTime @default(now())
-
-  @@unique([outletId])
-}
-
-model OrderType {
-  id                String              @id @default(uuid())
-  name              String              @unique
-  orders            Order[]
-  prices            FoodPrice[]
-  OrderTypeDiscount OrderTypeDiscount[]
-}
-
-model OrderTypeDiscount {
-  id          String    @id @default(uuid())
-  outletId    String
-  outlet      Outlet    @relation(fields: [outletId], references: [id])
-  orderTypeId String
-  orderType   OrderType @relation(fields: [orderTypeId], references: [id])
-  percentage  Float
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@unique([orderTypeId, outletId])
-}
-
-model Order {
-  id                 String               @id @default(uuid())
-  orderNumber        String
-  diningTableId      String?
-  diningTable        DiningTable?         @relation(fields: [diningTableId], references: [id])
-  waiterId           String
-  waiter             User                 @relation("WaiterOrders", fields: [waiterId], references: [id])
-  outletId           String
-  outlet             Outlet               @relation(fields: [outletId], references: [id])
-  orderTypeId        String
-  orderType          OrderType            @relation(fields: [orderTypeId], references: [id])
-  items              OrderItem[]
-  status             OrderStatus          @default(PENDING)
-  customerName       String?
-  onlineCode         String?
-  remark             String?
-  subtotal           Float                @default(0)
-  total              Float                @default(0)
-  createdAt          DateTime             @default(now())
-  Billing            Billing?
-  IngredientStockLog IngredientStockLog[]
-
-  @@unique([outletId, orderNumber])
-}
-
-model OrderItem {
-  id         String            @id @default(uuid())
-  orderId    String
-  order      Order             @relation(fields: [orderId], references: [id])
-  foodId     String
-  food       Food              @relation(fields: [foodId], references: [id])
-  quantity   Int               @default(1)
-  unitPrice  Float             @default(0)
-  totalPrice Float             @default(0)
-  options    OrderItemOption[]
-  status     OrderItemStatus   @default(ACTIVE)
-  createdAt  DateTime          @default(now())
-
-  @@index([orderId])
-}
-
-model OrderItemOption {
-  id          String          @id @default(uuid())
-  orderItemId String
-  orderItem   OrderItem       @relation(fields: [orderItemId], references: [id])
-  optionId    String
-  option      FoodOption      @relation(fields: [optionId], references: [id])
-  quantity    Int             @default(1)
-  unitPrice   Float           @default(0)
-  totalPrice  Float           @default(0)
-  status      OrderItemStatus @default(ACTIVE)
-  createdAt   DateTime        @default(now())
-
-  @@index([optionId])
-}
-
-model Billing {
-  id          String @id @default(uuid())
-  orderId     String @unique
-  order       Order  @relation(fields: [orderId], references: [id])
-  orderNumber String
-  outletId    String
-  outlet      Outlet @relation(fields: [outletId], references: [id])
-
-  // Financial summary
-  subtotal    Float // Copied from Order.subtotal
-  tax         Float // Copied from Order.tax
-  discount    Float // Copied from Order.discount
-  total       Float // Copied from Order.total
-  amountPaid  Float // Might differ if partial payment is allowed
-  changeGiven Float // For cash transactions
-
-  // Payment info
-  status      PaymentStatus @default(PAID)
-  paymentType PaymentType
-  paidAt      DateTime      @default(now())
-  cashierId   String
-  cashier     User          @relation(fields: [cashierId], references: [id])
-
-  // Metadata for printing or auditing
-  receiptNumber String
-  remark        String?
-
-  createdAt DateTime @default(now())
-
-  @@unique([outletId, receiptNumber])
-}
-
-model DailyCashReconciliation {
-  id       String   @id @default(uuid())
-  outletId String
-  outlet   Outlet   @relation(fields: [outletId], references: [id])
-  date     DateTime @map("report_date") // The date this reconciliation record is for (YYYY-MM-DD, typically 00:00:00 for the start of the day)
-
-  previousDayBalance     Float   @default(0) // Balance carried from the end of the previous day
-  cashDeposit            Float   @default(0) // Manually entered cash deposit for this day
-  dailyCashRevenue       Float   @default(0) // Total CASH revenue for this specific day (from Billing table)
-  adjustmentAmount       Float?  @default(0) // Optional manual adjustment by admin
-  remainingBalance       Float   @default(0) // Calculated: previousDayBalance + dailyCashRevenue - cashDeposit
-  paymentRemarks         Json?
-  isLocked               Boolean @default(false)
-  submittedByCashierName String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([outletId, date]) // Ensure only one reconciliation record per outlet per day
-  @@index([date]) // For efficient querying by date
-  @@map("daily_cash_reconciliation") // Maps to a table name in your database
 }

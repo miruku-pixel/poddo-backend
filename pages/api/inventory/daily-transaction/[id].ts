@@ -30,6 +30,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     StockLogType.TRANSFER_KLEAK,
     StockLogType.TRANSFER_PANIKI,
     StockLogType.TRANSFER_ITC,
+    StockLogType.TRANSFER_MANTOS,
   ];
 
   if (
@@ -125,10 +126,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           quantity: quantity, // Store the new positive input quantity
           note:
             note ||
-            `Manual ${existingLog.type.toLowerCase()} updated by user ${
-              user.id
-            } at outlet ${outletId} for ${
-              existingLog.transactionDate.toISOString().split("T")[0]
+            `Manual ${existingLog.type.toLowerCase()} updated by user ${user.id
+            } at outlet ${outletId} for ${existingLog.transactionDate.toISOString().split("T")[0]
             }`, // Include original date and outletId in note for clarity
           updatedAt: new Date(), // Update the log entry's updatedAt timestamp
         },

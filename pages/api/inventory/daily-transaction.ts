@@ -26,6 +26,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     StockLogType.TRANSFER_PANIKI,
     StockLogType.TRANSFER_KLEAK,
     StockLogType.TRANSFER_MALALAYANG,
+    StockLogType.TRANSFER_MANTOS,
     // Add other outbound types if they are to be handled here, e.g., OUTBOUND_NM, OUTBOUND_BOSS, OUTBOUND_STAFF
     // If those are handled by deductIngredientsForPaidOrder, they should not be included here.
   ];
@@ -123,8 +124,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           type: type as StockLogType,
           note:
             note ||
-            `Manual ${type.toLowerCase()} by user ${
-              user.id
+            `Manual ${type.toLowerCase()} by user ${user.id
             } at outlet ${outletId} for date ${date}`,
           transactionDate: transactionDate,
           createdAt: new Date(),

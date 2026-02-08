@@ -27,6 +27,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     StockLogType.TRANSFER_KLEAK,
     StockLogType.TRANSFER_MALALAYANG,
     StockLogType.TRANSFER_MANTOS,
+    StockLogType.TRANSFER_MAUMBI,
+    StockLogType.TRANSFER_TUMINTING,
+    StockLogType.TRANSFER_17AGUSTUS,
+    StockLogType.TRANSFER_PERKAMIL,
     // Add other outbound types if they are to be handled here, e.g., OUTBOUND_NM, OUTBOUND_BOSS, OUTBOUND_STAFF
     // If those are handled by deductIngredientsForPaidOrder, they should not be included here.
   ];

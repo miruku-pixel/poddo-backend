@@ -94,6 +94,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       StockLogType.TRANSFER_PANIKI,
       StockLogType.TRANSFER_ITC,
       StockLogType.TRANSFER_MANTOS,
+      StockLogType.TRANSFER_MAUMBI,
+      StockLogType.TRANSFER_TUMINTING,
+      StockLogType.TRANSFER_17AGUSTUS,
+      StockLogType.TRANSFER_PERKAMIL,
     ];
 
     // 1. Calculate the Opening Balance for the entire reporting month
@@ -168,6 +172,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         transferPaniki: number;
         transferItc: number;
         transferMantos: number;
+        transferMaumbi: number;
+        transferTuminting: number;
+        transfer17Agustus: number;
+        transferPerkamil: number;
       }
     >();
 
@@ -189,6 +197,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         transferPaniki: 0,
         transferItc: 0,
         transferMantos: 0,
+        transferMaumbi: 0,
+        transferTuminting: 0,
+        transfer17Agustus: 0,
+        transferPerkamil: 0,
       });
     }
 
@@ -237,6 +249,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         case StockLogType.TRANSFER_MANTOS:
           agg.transferMantos += log.quantity;
           break;
+        case StockLogType.TRANSFER_MAUMBI:
+          agg.transferMaumbi += log.quantity;
+          break;
+        case StockLogType.TRANSFER_TUMINTING:
+          agg.transferTuminting += log.quantity;
+          break;
+        case StockLogType.TRANSFER_17AGUSTUS:
+          agg.transfer17Agustus += log.quantity;
+          break;
+        case StockLogType.TRANSFER_PERKAMIL:
+          agg.transferPerkamil += log.quantity;
+          break;
         default:
           console.warn(
             `[Monthly Report API] Unhandled StockLogType: ${log.type} for quantity: ${log.quantity} on ${dateKey}`
@@ -271,7 +295,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         dailyStats.transferKleak -
         dailyStats.transferPaniki -
         dailyStats.transferItc -
-        dailyStats.transferMantos;
+        dailyStats.transferMantos -
+        dailyStats.transferMaumbi -
+        dailyStats.transferTuminting -
+        dailyStats.transfer17Agustus -
+        dailyStats.transferPerkamil;
 
       reportData.push({
         date: dateKey,
@@ -291,6 +319,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         transferPaniki: Math.round(dailyStats.transferPaniki), // Round to nearest whole number
         transferItc: Math.round(dailyStats.transferItc), // Round to nearest whole number
         transferMantos: Math.round(dailyStats.transferMantos), // Round to nearest whole number
+        transferMaumbi: Math.round(dailyStats.transferMaumbi), // Round to nearest whole number
+        transferTuminting: Math.round(dailyStats.transferTuminting), // Round to nearest whole number
+        transfer17Agustus: Math.round(dailyStats.transfer17Agustus), // Round to nearest whole number
+        transferPerkamil: Math.round(dailyStats.transferPerkamil), // Round to nearest whole number
         closingBalance: Math.round(closingBalanceForCurrentDay), // Round to nearest whole number
       });
 

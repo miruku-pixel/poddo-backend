@@ -31,6 +31,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     StockLogType.TRANSFER_PANIKI,
     StockLogType.TRANSFER_ITC,
     StockLogType.TRANSFER_MANTOS,
+    StockLogType.TRANSFER_MAUMBI,
+    StockLogType.TRANSFER_TUMINTING,
+    StockLogType.TRANSFER_17AGUSTUS,
+    StockLogType.TRANSFER_PERKAMIL,
   ];
 
   if (

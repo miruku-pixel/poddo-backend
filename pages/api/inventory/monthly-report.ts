@@ -98,6 +98,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       StockLogType.TRANSFER_TUMINTING,
       StockLogType.TRANSFER_17AGUSTUS,
       StockLogType.TRANSFER_PERKAMIL,
+      StockLogType.ADJUST_OUT,
     ];
 
     // 1. Calculate the Opening Balance for the entire reporting month
@@ -121,97 +122,99 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     balanceBeforeMonthLogs.forEach((log) => {
       let effect = 0;
-      if (log.type === StockLogType.INBOUND) {
+      if (log.type === StockLogType.INBOUND || log.type === StockLogType.ADJUST_IN || log.type === StockLogType.PROCESS_IN) {
         effect = log.quantity;
-      } else if (deductionStockLogTypes.includes(log.type)) {
+      } else if (deductionStockLogTypes.includes(log.type) || log.type === StockLogType.PROCESS_OUT) {
         // Apply negative effect for deduction types
         effect = -log.quantity;
       }
       openingBalanceForMonth += effect;
     });
 
-    // 2. Fetch ALL relevant StockLogs for the requested month
-    // This includes INBOUND, all OUTBOUND types, DISCREPANCY, and all TRANSFER types.
-    const monthlyStockLogs = await prisma.ingredientStockLog.findMany({
+    // 1. Fetch history logs and current stocks
+    const history = await prisma.ingredientStockLog.findMany({
       where: {
         ingredientId: ingredientId,
-        outletId: outletId, // Filter by outletId
+        outletId: outletId,
         transactionDate: {
           gte: startOfMonth,
           lte: endOfMonth,
         },
-        type: {
-          // Include all relevant StockLogType enum values here
-          in: Object.values(StockLogType),
-        },
-      },
-      orderBy: {
-        transactionDate: "asc",
       },
       select: {
         quantity: true,
         type: true,
         transactionDate: true,
       },
+      orderBy: { transactionDate: "asc" },
     });
 
-    // 3. Aggregate all daily data based on monthlyStockLogs
-    const dailyAggregates = new Map<
-      string,
-      {
-        inbound: number;
-        soldBoss: number;
-        soldStaff: number;
-        soldOther: number;
-        discrepancy: number;
-        transferNagoya: number;
-        transferSeraya: number;
-        transferBengkong: number;
-        transferMalalayang: number;
-        transferKleak: number;
-        transferPaniki: number;
-        transferItc: number;
-        transferMantos: number;
-        transferMaumbi: number;
-        transferTuminting: number;
-        transfer17Agustus: number;
-        transferPerkamil: number;
-      }
-    >();
+    // 2. Aggregate daily data, now including prosesIn and prosesOut
+    const dailyAggregates = new Map<string, {
+      inbound: number;
+      prosesOut: number;
+      soldBoss: number;
+      soldStaff: number;
+      soldOther: number;
+      prosesIn: number;
+      discrepancy: number;
+      adjustment: number; // Net adjustment (IN positive, OUT negative)
+      transferNagoya: number;
+      transferSeraya: number;
+      transferBengkong: number;
+      transferMalalayang: number;
+      transferKleak: number;
+      transferPaniki: number;
+      transferItc: number;
+      transferMantos: number;
+      transferMaumbi: number;
+      transferTuminting: number;
+      transfer17Agustus: number;
+      transferPerkamil: number;
+    }>();
 
-    // Initialize all days of the month in the aggregate map to ensure they appear in the report
+    // Initialize days
     for (let day = 1; day <= new Date(yearNum, monthNum, 0).getDate(); day++) {
-      const currentDate = new Date(Date.UTC(yearNum, monthNum - 1, day));
-      const dateKey = currentDate.toISOString().split("T")[0];
+      const dateKey = new Date(Date.UTC(yearNum, monthNum - 1, day))
+        .toISOString()
+        .split("T")[0];
       dailyAggregates.set(dateKey, {
-        inbound: 0,
-        soldBoss: 0,
-        soldStaff: 0,
-        soldOther: 0,
-        discrepancy: 0,
-        transferNagoya: 0,
-        transferSeraya: 0,
-        transferBengkong: 0,
-        transferMalalayang: 0,
-        transferKleak: 0,
-        transferPaniki: 0,
-        transferItc: 0,
-        transferMantos: 0,
-        transferMaumbi: 0,
-        transferTuminting: 0,
-        transfer17Agustus: 0,
-        transferPerkamil: 0,
-      });
+  inbound: 0,
+  prosesOut: 0,
+  soldBoss: 0,
+  soldStaff: 0,
+  soldOther: 0,
+  prosesIn: 0,
+  discrepancy: 0,
+  adjustment: 0,
+  transferNagoya: 0,
+  transferSeraya: 0,
+  transferBengkong: 0,
+  transferMalalayang: 0,
+  transferKleak: 0,
+  transferPaniki: 0,
+  transferItc: 0,
+  transferMantos: 0,
+  transferMaumbi: 0,
+  transferTuminting: 0,
+  transfer17Agustus: 0,
+  transferPerkamil: 0,
+});
     }
 
-    // Process ALL monthlyStockLogs based on their type to populate dailyAggregates
-    monthlyStockLogs.forEach((log) => {
+    // Populate aggregation
+    history.forEach((log) => {
       const dateKey = log.transactionDate.toISOString().split("T")[0];
-      const agg = dailyAggregates.get(dateKey)!; // Guaranteed to exist due to initialization
-
+      const agg = dailyAggregates.get(dateKey)!;
       switch (log.type) {
         case StockLogType.INBOUND:
           agg.inbound += log.quantity;
+          break;
+        case StockLogType.PROCESS_OUT:
+          agg.prosesOut += log.quantity;
+          break;
+        case StockLogType.PROCESS_IN:
+          agg.prosesIn += log.quantity;
           break;
         case StockLogType.OUTBOUND_BOSS:
           agg.soldBoss += log.quantity;
@@ -220,10 +223,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           agg.soldStaff += log.quantity;
           break;
         case StockLogType.OUTBOUND_NM:
-          agg.soldOther += log.quantity; // Non-Manager / Normal Sales
+          agg.soldOther += log.quantity;
+          break;
+        case StockLogType.ADJUST_IN:
+          agg.adjustment += log.quantity; // Positive adjustment
+          break;
+        case StockLogType.ADJUST_OUT:
+          agg.adjustment -= log.quantity; // Negative adjustment
           break;
         case StockLogType.DISCREPANCY:
-          agg.discrepancy += log.quantity;
+          agg.discrepancy += log.quantity; // Discrepancy adjustment
           break;
         case StockLogType.TRANSFER_NAGOYA:
           agg.transferNagoya += log.quantity;
@@ -262,71 +271,71 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           agg.transferPerkamil += log.quantity;
           break;
         default:
-          console.warn(
-            `[Monthly Report API] Unhandled StockLogType: ${log.type} for quantity: ${log.quantity} on ${dateKey}`
-          );
+          break;
       }
     });
 
-    // 4. Build the final report data, iterating through each day of the month
+    // 4. Build report rows with new proses columns
     const reportData: any[] = [];
     const sortedDateKeys = Array.from(dailyAggregates.keys()).sort();
 
-    let currentRunningClosingBalance = openingBalanceForMonth;
+    let runningBalance = openingBalanceForMonth;
 
     for (const dateKey of sortedDateKeys) {
-      const dailyStats = dailyAggregates.get(dateKey)!; // Guaranteed to exist
-
-      const openingBalanceForCurrentDay = currentRunningClosingBalance;
-
-      // Calculate closing balance for the current day based on all aggregated types
-      // All OUTBOUND and TRANSFER types are deductions
-      const closingBalanceForCurrentDay =
-        openingBalanceForCurrentDay +
-        dailyStats.inbound -
-        dailyStats.soldBoss -
-        dailyStats.soldStaff -
-        dailyStats.soldOther -
-        dailyStats.discrepancy -
-        dailyStats.transferNagoya -
-        dailyStats.transferSeraya -
-        dailyStats.transferBengkong -
-        dailyStats.transferMalalayang -
-        dailyStats.transferKleak -
-        dailyStats.transferPaniki -
-        dailyStats.transferItc -
-        dailyStats.transferMantos -
-        dailyStats.transferMaumbi -
-        dailyStats.transferTuminting -
-        dailyStats.transfer17Agustus -
-        dailyStats.transferPerkamil;
+      const agg = dailyAggregates.get(dateKey)!;
+      const opening = runningBalance;
+      const closing =
+        opening +
+        agg.inbound +
+        agg.prosesIn -
+        agg.prosesOut -
+        agg.soldBoss -
+        agg.soldStaff -
+        agg.soldOther -
+        agg.discrepancy +
+        agg.adjustment -
+        agg.transferNagoya -
+        agg.transferSeraya -
+        agg.transferBengkong -
+        agg.transferMalalayang -
+        agg.transferKleak -
+        agg.transferPaniki -
+        agg.transferItc -
+        agg.transferMantos -
+        agg.transferMaumbi -
+        agg.transferTuminting -
+        agg.transfer17Agustus -
+        agg.transferPerkamil;
 
       reportData.push({
         date: dateKey,
         ingredient: ingredientName,
-        outletId: outletId, // Include outletId in the report data
-        openingBalance: Math.round(openingBalanceForCurrentDay), // Round to nearest whole number
-        inbound: Math.round(dailyStats.inbound), // Round to nearest whole number
-        soldBoss: Math.round(dailyStats.soldBoss), // Round to nearest whole number
-        soldStaff: Math.round(dailyStats.soldStaff), // Round to nearest whole number
-        soldOther: Math.round(dailyStats.soldOther), // Round to nearest whole number
-        discrepancy: Math.round(dailyStats.discrepancy), // Round to nearest whole number
-        transferNagoya: Math.round(dailyStats.transferNagoya), // Round to nearest whole number
-        transferSeraya: Math.round(dailyStats.transferSeraya), // Round to nearest whole number
-        transferBengkong: Math.round(dailyStats.transferBengkong), // Round to nearest whole number
-        transferMalalayang: Math.round(dailyStats.transferMalalayang), // Round to nearest whole number
-        transferKleak: Math.round(dailyStats.transferKleak), // Round to nearest whole number
-        transferPaniki: Math.round(dailyStats.transferPaniki), // Round to nearest whole number
-        transferItc: Math.round(dailyStats.transferItc), // Round to nearest whole number
-        transferMantos: Math.round(dailyStats.transferMantos), // Round to nearest whole number
-        transferMaumbi: Math.round(dailyStats.transferMaumbi), // Round to nearest whole number
-        transferTuminting: Math.round(dailyStats.transferTuminting), // Round to nearest whole number
-        transfer17Agustus: Math.round(dailyStats.transfer17Agustus), // Round to nearest whole number
-        transferPerkamil: Math.round(dailyStats.transferPerkamil), // Round to nearest whole number
-        closingBalance: Math.round(closingBalanceForCurrentDay), // Round to nearest whole number
-      });
+        outletId: outletId,
+        openingBalance: Math.round(opening),
+        inbound: Math.round(agg.inbound),
+        prosesOut: Math.round(agg.prosesOut),
+        soldBoss: Math.round(agg.soldBoss),
+        soldStaff: Math.round(agg.soldStaff),
+        soldOther: Math.round(agg.soldOther),
+        prosesIn: Math.round(agg.prosesIn),
+        adjustment: Math.round(agg.adjustment),
+        discrepancy: Math.round(agg.discrepancy),
+        transferNagoya: Math.round(agg.transferNagoya),
+        transferSeraya: Math.round(agg.transferSeraya),
+        transferBengkong: Math.round(agg.transferBengkong),
+        transferMalalayang: Math.round(agg.transferMalalayang),
+        transferKleak: Math.round(agg.transferKleak),
+        transferPaniki: Math.round(agg.transferPaniki),
+        transferItc: Math.round(agg.transferItc),
+        transferMantos: Math.round(agg.transferMantos),
+        transferMaumbi: Math.round(agg.transferMaumbi),
+        transferTuminting: Math.round(agg.transferTuminting),
+        transfer17Agustus: Math.round(agg.transfer17Agustus),
+        transferPerkamil: Math.round(agg.transferPerkamil),
 
-      currentRunningClosingBalance = closingBalanceForCurrentDay;
+        closingBalance: Math.round(closing),
+      });
+      runningBalance = closing;
     }
 
     res.status(200).json({

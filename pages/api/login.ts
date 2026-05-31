@@ -44,7 +44,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
-    // 🔐 Outlet access logic
     const outletAccessList = user.OutletAccess.map((access) => access.outletId);
     const hasAccess =
       outletAccessList.length > 0
@@ -58,7 +57,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     const token = jwt.sign(
-      { id: user.id, role: user.role, outletId }, // include selected outletId
+      { id: user.id, role: user.role, outletId },
       JWT_SECRET,
       { expiresIn: "1d" }
     );

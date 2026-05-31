@@ -31,6 +31,10 @@ model Outlet {
   ReceiptNumberCounter    ReceiptNumberCounter?
   users                   User[]
   DailyCashReconciliation DailyCashReconciliation[]
+  ingredientProcesses             IngredientProcess[]
+  IngredientProcessNumberCounter  IngredientProcessNumberCounter?
+  ingredientAdjustments           IngredientAdjustment[]
+  IngredientAdjustmentNumberCounter IngredientAdjustmentNumberCounter?
 }
 
 model OutletAccess {
@@ -55,6 +59,8 @@ model User {
   orders       Order[]        @relation("WaiterOrders")
   OutletAccess OutletAccess[]
   outlet       Outlet         @relation(fields: [outletId], references: [id])
+  ingredientProcesses         IngredientProcess[]
+  ingredientAdjustments       IngredientAdjustment[]
 }
 
 model Ingredient {
@@ -68,6 +74,9 @@ model Ingredient {
   foodLinks          FoodIngredient[]
   outlet             Outlet               @relation(fields: [outletId], references: [id])
   IngredientStockLog IngredientStockLog[]
+  sourceProcesses    IngredientProcess[]  @relation("SourceIngredient")
+  targetProcesses    IngredientProcess[]  @relation("TargetIngredient")
+  ingredientAdjustments IngredientAdjustment[]
 }
 
 model FoodIngredient {
@@ -340,6 +349,10 @@ enum StockLogType {
   TRANSFER_TUMINTING
   TRANSFER_17AGUSTUS
   TRANSFER_PERKAMIL
+  PROCESS_IN
+  PROCESS_OUT
+  ADJUST_IN
+  ADJUST_OUT
 }
 
 enum OrderItemStatus {
@@ -365,4 +378,55 @@ enum Role {
   ADMIN
   SUPERUSER
   OWNER
+}
+
+model IngredientProcess {
+  id                 String     @id @default(uuid())
+  processNo          String     // Running number (e.g. "0000001", padded to 7 digits)
+  outletId           String
+  sourceIngredientId String
+  targetIngredientId String
+  quantity           Float      // Quantity processed in pieces (1:1 ratio enforced)
+  notes              String?
+  processedById      String
+  createdAt          DateTime   @default(now())
+
+  // Relations
+  outlet             Outlet     @relation(fields: [outletId], references: [id])
+  sourceIngredient   Ingredient @relation("SourceIngredient", fields: [sourceIngredientId], references: [id])
+  targetIngredient   Ingredient @relation("TargetIngredient", fields: [targetIngredientId], references: [id])
+  processedBy        User       @relation(fields: [processedById], references: [id])
+}
+
+model IngredientProcessNumberCounter {
+  id        String   @id @default(uuid())
+  outletId  String   @unique
+  current   Int      @default(0)
+  createdAt DateTime @default(now())
+  outlet    Outlet   @relation(fields: [outletId], references: [id])
+}
+
+model IngredientAdjustment {
+  id                 String     @id @default(uuid())
+  adjustmentNo       String     // Running number (e.g. "0000001", padded to 7 digits)
+  outletId           String
+  ingredientId       String
+  type               String     // "IN" or "OUT"
+  quantity           Float      
+  notes              String?
+  adjustedById       String
+  createdAt          DateTime   @default(now())
+
+  // Relations
+  outlet             Outlet     @relation(fields: [outletId], references: [id])
+  ingredient         Ingredient @relation(fields: [ingredientId], references: [id])
+  adjustedBy         User       @relation(fields: [adjustedById], references: [id])
+}
+
+model IngredientAdjustmentNumberCounter {
+  id        String   @id @default(uuid())
+  outletId  String   @unique
+  current   Int      @default(0)
+  createdAt DateTime @default(now())
+  outlet    Outlet   @relation(fields: [outletId], references: [id])
 }

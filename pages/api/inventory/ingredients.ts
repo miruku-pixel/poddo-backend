@@ -29,48 +29,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
-    // 1. Find all unique ingredient IDs that are linked to Food items
-    //    which belong to the specified outletId.
-    const foodIngredientsInOutletFoods = await prisma.foodIngredient.findMany({
-      where: {
-        food: {
-          outletId: outletId, // Filter by the outlet ID associated with the food
-        },
-      },
-      select: {
-        ingredientId: true, // Select only the ingredient ID
-      },
-      distinct: ["ingredientId"], // Get only unique ingredient IDs to avoid duplicates
-    });
-
-    // Extract the array of unique ingredient IDs
-    const ingredientIds = foodIngredientsInOutletFoods.map(
-      (fi) => fi.ingredientId
-    );
-
-    // If no ingredients are found for foods in this outlet, return an empty array
-    if (ingredientIds.length === 0) {
-      return res.status(200).json([]);
-    }
-
-    // 2. Fetch the full details (id, name, unit) for these unique ingredients
+    // Fetch all ingredients for the outlet, ensuring items like "Ayam Mentah" appear in the dropdown
     const ingredients = await prisma.ingredient.findMany({
-      where: {
-        id: {
-          in: ingredientIds, // Filter ingredients by the IDs found above
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        unit: true,
-      },
-      orderBy: {
-        name: "asc", // Order ingredients alphabetically by name for better display in the UI
-      },
+      where: { outletId },
+      select: { id: true, name: true, unit: true },
+      orderBy: { name: "asc" },
     });
-
-    // Return the list of ingredients
     return res.status(200).json(ingredients);
   } catch (error: any) {
     // Log the error for debugging purposes

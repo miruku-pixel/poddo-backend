@@ -98,6 +98,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       StockLogType.TRANSFER_TUMINTING,
       StockLogType.TRANSFER_17AGUSTUS,
       StockLogType.TRANSFER_PERKAMIL,
+      StockLogType.TRANSFER_TATELI,
       StockLogType.ADJUST_OUT,
     ];
 
@@ -171,6 +172,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       transferTuminting: number;
       transfer17Agustus: number;
       transferPerkamil: number;
+      transferTateli: number;
     }>();
 
     // Initialize days
@@ -179,27 +181,28 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         .toISOString()
         .split("T")[0];
       dailyAggregates.set(dateKey, {
-  inbound: 0,
-  prosesOut: 0,
-  soldBoss: 0,
-  soldStaff: 0,
-  soldOther: 0,
-  prosesIn: 0,
-  discrepancy: 0,
-  adjustment: 0,
-  transferNagoya: 0,
-  transferSeraya: 0,
-  transferBengkong: 0,
-  transferMalalayang: 0,
-  transferKleak: 0,
-  transferPaniki: 0,
-  transferItc: 0,
-  transferMantos: 0,
-  transferMaumbi: 0,
-  transferTuminting: 0,
-  transfer17Agustus: 0,
-  transferPerkamil: 0,
-});
+        inbound: 0,
+        prosesOut: 0,
+        soldBoss: 0,
+        soldStaff: 0,
+        soldOther: 0,
+        prosesIn: 0,
+        discrepancy: 0,
+        adjustment: 0,
+        transferNagoya: 0,
+        transferSeraya: 0,
+        transferBengkong: 0,
+        transferMalalayang: 0,
+        transferKleak: 0,
+        transferPaniki: 0,
+        transferItc: 0,
+        transferMantos: 0,
+        transferMaumbi: 0,
+        transferTuminting: 0,
+        transfer17Agustus: 0,
+        transferPerkamil: 0,
+        transferTateli: 0,
+      });
     }
 
     // Populate aggregation
@@ -270,6 +273,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         case StockLogType.TRANSFER_PERKAMIL:
           agg.transferPerkamil += log.quantity;
           break;
+        case StockLogType.TRANSFER_TATELI:
+          agg.transferTateli += log.quantity;
+          break;
         default:
           break;
       }
@@ -305,7 +311,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         agg.transferMaumbi -
         agg.transferTuminting -
         agg.transfer17Agustus -
-        agg.transferPerkamil;
+        agg.transferPerkamil -
+        agg.transferTateli;
 
       reportData.push({
         date: dateKey,
@@ -332,7 +339,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         transferTuminting: Math.round(agg.transferTuminting),
         transfer17Agustus: Math.round(agg.transfer17Agustus),
         transferPerkamil: Math.round(agg.transferPerkamil),
-
+        transferTateli: Math.round(agg.transferTateli),
         closingBalance: Math.round(closing),
       });
       runningBalance = closing;
